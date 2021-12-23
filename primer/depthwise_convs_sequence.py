@@ -23,9 +23,9 @@ head_dim = d_k
 
 
 # input from projection layer [seq_len, batch_size, heads, d_k]
-# my: [batch, head_dim, num_heads, seq_length]
 # https://nn.labml.ai/transformers/primer_ez/index.html
-# labml.ai: [batch_size, heads, d_k, seq_len]
+# labml.ai: [batch_size * heads, d_k, seq_len]
+# my: [batch, num_heads, head_dim, seq_length]
 query = torch.rand(batch_size, num_heads, head_dim, seq_len)
 print("query size: ", query.size())
 

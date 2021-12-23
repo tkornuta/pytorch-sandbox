@@ -132,7 +132,7 @@ val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=16, shuffle=Fal
 model = Bert2Bert()
 
 # Create PTL trainer.
-trainer = Trainer(max_epochs=5, accelerator="gpu", devices=1, strategy="ddp")
+trainer = Trainer(max_epochs=5, accelerator="gpu", devices=2, strategy="ddp")
 
 trainer.fit(model, train_loader, val_loader)
 

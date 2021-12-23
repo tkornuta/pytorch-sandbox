@@ -1,10 +1,12 @@
-# we'll use three operations
+# SPDX-License-Identifier: Apache-2.0
+
 from einops import rearrange, reduce, repeat
 
 import torch
 
 # Number of heads - each with Q,K,V.
-num_heads = 3
+#seq_len = 5
+num_heads = 2
 head_dim = 4
 qkv = 3
 
@@ -32,5 +34,11 @@ print("second head -> K")
 print(tensor[1][1])
 
 print("[QKV, (NUM_HEADS HEAD_DIM)] :")
-qkv = rearrange(tensor, "num_heads qkv head_dim -> qkv (num_heads head_dim)")
+qkv = rearrange(tensor, "num_heads qkv head_dim -> qkv num_heads head_dim")
 print(qkv)
+queries, keys, values = qkv[0], qkv[1], qkv[2]
+print(queries)
+
+# Q * K.
+score = torch.einsum('qd, kd -> qk', queries, keys)
+print(score)

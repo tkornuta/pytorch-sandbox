@@ -125,14 +125,14 @@ val_dataset = get_dataset_split(split="validation", local_path="./pubmed-summari
 
 
 # Create data loaders for our datasets.
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=16, shuffle=True, num_workers=2)
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=28, shuffle=True, num_workers=2)
 val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=16, shuffle=False, num_workers=2)
 
 # Model.
 model = Bert2Bert()
 
 # Create PTL trainer.
-trainer = Trainer(max_epochs=5, accelerator="gpu", devices=2, strategy="ddp")
+trainer = Trainer(max_epochs=1, accelerator="gpu", devices=2, strategy="ddp")
 
 trainer.fit(model, train_loader, val_loader)
 
@@ -184,7 +184,7 @@ def generate_summary(batch):
     return batch
 
 
-# Rune evaluation on gpu.
+# Run evaluation on gpu.
 model.eval()
 model.to("cuda")
 results = test_data.map(generate_summary, batched=True, batch_size=16, remove_columns=["article"])

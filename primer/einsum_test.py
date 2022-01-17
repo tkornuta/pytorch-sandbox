@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# einsum tutorial: https://www.youtube.com/watch?v=pkVwUVEHmfI
 
 import torch
 from einops import rearrange
@@ -37,42 +38,3 @@ print(queries)
 Q = rearrange(torch.arange(1,7), "(batch seq) -> batch seq", batch=BATCH_SIZE)
 K = rearrange(torch.arange(1,7), "(batch seq) -> batch seq", batch=BATCH_SIZE)
 V = rearrange(torch.arange(1,7), "(batch seq) -> batch seq", batch=BATCH_SIZE)
-
-
-# values from:
-# https://towardsdatascience.com/illustrated-self-attention-2d627e33b20a
-
-# BATCH_SIZE = 3, SEQ_LEN = 4
-input = torch.tensor([[1, 0, 1, 0],
-    [0, 2, 0, 2],
-    [1, 1, 1, 1]])
-
-# head_dim = 4
-Wq = torch.tensor(
-[[1, 0, 1],
- [1, 0, 0],
- [0, 0, 1],
- [0, 1, 1]])
-
-Wk = torch.tensor(
-[[0, 0, 1],
- [1, 1, 0],
- [0, 1, 0],
- [1, 1, 0]])
-
-Wv = torch.tensor(
-[[0, 2, 0],
- [0, 3, 0],
- [1, 0, 3],
- [1, 1, 0]])
-
-import pdb;pdb.set_trace()
-queries = torch.matmul(input, Wq)
-keys = torch.matmul(input, Wk)
-values = torch.matmul(input, Wv)
-
-score =  torch.matmul(Q, K.transpose(0,1))
-print("score.shape :", score.shape)
-print(score)
-
-out = score * V

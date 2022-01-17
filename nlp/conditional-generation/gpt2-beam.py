@@ -23,6 +23,7 @@ beam_output = model.generate(
     num_beams=5, 
     early_stopping=True,
     no_repeat_ngram_size=2, 
+    num_return_sequences=5, 
     )
 
 print(f"Output ({beam_output.shape}): {beam_output}")

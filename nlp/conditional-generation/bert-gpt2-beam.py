@@ -2,7 +2,7 @@
 # based on: https://huggingface.co/blog/how-to-generate
 
 from transformers import BertTokenizer, EncoderDecoderModel, AutoModel
-from transformers import BertGenerationEncoder, BertGenerationDecoder
+from transformers import BertGenerationEncoder, GPT2LMHeadModel, BertGenerationDecoder
 
 tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
@@ -12,8 +12,8 @@ tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 
 # Version 2: load pretrained modules separatelly and join them.
 encoder = BertGenerationEncoder.from_pretrained("bert-base-uncased", bos_token_id=101, eos_token_id=102)
-# add cross attention layers and use BERT's cls token as BOS token and sep token as EOS token
-decoder = BertGenerationDecoder.from_pretrained("bert-base-uncased", add_cross_attention=True, is_decoder=True, bos_token_id=101, eos_token_id=102)
+# add cross attention layers and use the same BOS and EOS tokens.
+decoder = GPT2LMHeadModel.from_pretrained("gpt2", add_cross_attention=True, is_decoder=True, bos_token_id=101, eos_token_id=102)
 model = EncoderDecoderModel(encoder=encoder, decoder=decoder)
 
 # encode context the generation is conditioned on

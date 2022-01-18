@@ -2,6 +2,7 @@
 # based on:
 # https://arxiv.org/pdf/1907.12461.pdf
 # https://huggingface.co/docs/transformers/model_doc/bertgeneration
+# https://medium.com/huggingface/encoder-decoders-in-transformers-a-hybrid-pre-trained-architecture-for-seq2seq-af4d7bf14bb8
 
 from transformers import BertTokenizer, BertTokenizerFast, EncoderDecoderModel, BertGenerationEncoder, BertGenerationDecoder
 

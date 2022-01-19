@@ -10,7 +10,7 @@ brain_path = "/home/tkornuta/data/brain2"
 processed_path = os.path.join(brain_path, "processed")
 symbolic_goals = os.path.join(processed_path, "symbolic_goals.csv")
 
-# Load "goal" vocabulary.
+# Load "unified decoder vocabulary" (goals + plans).
 vocab_file = "/home/tkornuta/data/brain2/models/model_goal/dec_vocab.json"
 with open(vocab_file) as f:
     vocab = json.load(f)

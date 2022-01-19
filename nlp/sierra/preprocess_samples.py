@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 brain_path = "/home/tkornuta/data/brain2"
 sierra_path = os.path.join(brain_path, "leonardo_sierra")
-output_path = os.path.join(brain_path, "processed")
+processed_path = os.path.join(brain_path, "processed")
 
 # Get files.
 sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
@@ -55,10 +55,10 @@ for filename in tqdm(sierra_files):
     #import pdb;pdb.set_trace()
 
 # Save to files.
-os.makedirs(output_path, exist_ok=True)
+os.makedirs(processed_path, exist_ok=True)
 
 def save_to(name, list_to_save):
-    filename = os.path.join(output_path, name)
+    filename = os.path.join(processed_path, name)
     with open(filename, "w") as f:
         for obj in list_to_save:
             if type(obj) is list:

@@ -1,0 +1,38 @@
+File/sample: data_00180000_00180861
+----------------------------------------
+
+Command (templated):
+put blue square on the bottom and red cube above it and do not have yellow sitting on the top of the table
+
+Plan language:
+grasp yellow block then pick up yellow then place yellow cube on mid-table and then align with red and then grab red square and then raise red cube and move red cube over blue block and place red square on blue square and after that grab green cube and after that pick up green and after that put green square on the middle and then take yellow cube then raise yellow cube and put yellow square on red and after that you're done,
+grasp yellow cube then pick up yellow square and after that put yellow on the center and grab red block and lift red block and then stack red block on top of blue and after that take green square and after that lift green square and then drop green block on the middle and after that take yellow block and then raise yellow square and move yellow square over top of red block and stack yellow cube on red square then return to beginning,get ready to take yellow cube and then take yellow block and then pick up yellow then drop yellow cube on the middle and after that grab red cube and after that pick up red square and stack red cube on top of blue block and after that reach for green block then take green cube and after that raise green and after that place green square on table top and then approach yellow cube then grab yellow square then lift yellow square then place yellow cube on red cube then that's it,
+approach yellow block and take yellow and pick up yellow cube then move yellow cube onto center and after that grasp red block then pick up red square and after that stack red on top of blue square and grasp green block then pick up green block and after that drop green cube on table top and then approach yellow and grab yellow block and then raise yellow block and then stack yellow square on red square and after that you can go home,
+reach for yellow cube then grab yellow cube then pick up yellow square and after that drop yellow on center and then take red cube and raise red block and then line red block up with blue square then place red block on blue cube and align with green square then take green and after that pick up green block and after that put green square on center and after that grab yellow cube and after that pick up yellow and then stack yellow on top of red cube and after that you're finished
+
+Command (human):
+(base) tkornuta@tkornuta-desktop:~$ cat ~/data/brain2/sierra_5k_v1.csv  | grep 00180000_00180861
+data_00180000_00180861.gif,
+"Separate the given stack to form blue, red and yellow blocks stack.",
+Make a stack of all blocks except the green block.
+
+Symbolic Plan / Actions :
+approach_obj(yellow_block),grasp_obj_on_red_block(yellow_block),lift_obj_from_red_block(yellow_block),place_on_center(yellow_block),approach_obj(red_block),grasp_obj(red_block),lift_obj_from_tabletop(red_block),align_red_block_with(blue_block),stack_red_block_on(blue_block),approach_obj(green_block),grasp_obj(green_block),lift_obj_from_far(green_block),place_on_center(green_block),approach_obj(yellow_block),grasp_obj(yellow_block),lift_obj_from_tabletop(yellow_block),align_yellow_block_with(red_block),stack_yellow_block_on(red_block),go_home(robot)
+
+Symbolic Goal:
+has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)
+
+File/sample: data_00030000_00030821
+----------------------------------------
+command_templates[-1]
+'set green square to the right of the table ... oh and put green square on the bottom and yellow then red cube above it'
+
+command_humans[-1]
+['Separate the given stack to form green, yellow and red blocks stack.',
+'Make a stack of all blocks except the blue block.']
+
+symbolic_plans[-1]
+'approach_obj(green_block),grasp_obj_on_red_block(green_block),lift_obj_from_red_block(green_block),place_on_right(green_block),approach_obj(yellow_block),grasp_obj_on_blue_block(yellow_block),lift_obj_from_blue_block(yellow_block),align_yellow_block_with(green_block),stack_yellow_block_on(green_block),approach_obj(red_block),grasp_obj(red_block),lift_obj_from_tabletop(red_block),align_red_block_with(yellow_block),stack_red_block_on(yellow_block),go_home(robot)'
+
+symbolic_goals[-1]
+'has_anything(robot),on_surface(green_block, right),on_surface(green_block, tabletop),stacked(yellow_block, red_block),stacked(green_block, yellow_block)'

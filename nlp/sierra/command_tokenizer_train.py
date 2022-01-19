@@ -56,7 +56,7 @@ def compare(filename, debug=False):
                     command = command.strip()
                     # Encode and decode.
                     encoded = tokenizer.encode(command)
-                    decoded = tokenizer.decode(encoded.ids).lower()
+                    decoded = tokenizer.decode(encoded.ids)
                     if command.lower() != decoded.lower():
                         if debug:
                             print(f"{command} !=\n{decoded}")

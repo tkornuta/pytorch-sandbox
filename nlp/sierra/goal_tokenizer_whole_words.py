@@ -4,8 +4,6 @@ import os
 import csv
 import json
 from tokenizers import Tokenizer
-from tokenizers.models import BPE
-from tokenizers.normalizers import Lowercase
 from tokenizers import BertWordPieceTokenizer
 from tokenizers.pre_tokenizers import Whitespace, Sequence
 
@@ -13,29 +11,38 @@ from tokenizers.pre_tokenizers import Whitespace, Sequence
 brain_path = "/home/tkornuta/data/brain2"
 processed_path = os.path.join(brain_path, "processed")
 symbolic_goals = os.path.join(processed_path, "symbolic_goals.csv")
+goals_tokenizer_path = os.path.join(brain_path, "leonardo_sierra_goals.tokenizer.json")
 
-# Load "goal" vocabulary.
-vocab_file = "/home/tkornuta/data/brain2/models/model_goal/dec_vocab.json"
-with open(vocab_file) as f:
-    vocab = json.load(f)
-print(f"Loaded vocabulary ({len(vocab)}):\n" + "-"*50)
-for k, v in vocab.items():
-    print(k, ": ", v)
+init = False
+if init:
+    # Load "goal" vocabulary.
+    vocab_file = "/home/tkornuta/data/brain2/models/model_goal/dec_vocab.json"
+    with open(vocab_file) as f:
+        vocab = json.load(f)
+    print(f"Loaded vocabulary ({len(vocab)}):\n" + "-"*50)
+    for k, v in vocab.items():
+        print(k, ": ", v)
 
-# Extend vocab with the required special tokens.
-vocab["[UNK]"] = len(vocab)
-vocab["[SEP]"] = len(vocab)
-vocab["[CLS]"] = len(vocab)
-vocab["[PAD]"] = len(vocab)
-vocab["[MASK]"] = len(vocab)
+    # Extend vocab with the required special tokens.
+    vocab["[UNK]"] = len(vocab)
+    vocab["[SEP]"] = len(vocab)
+    vocab["[CLS]"] = len(vocab)
+    vocab["[PAD]"] = len(vocab)
+    vocab["[MASK]"] = len(vocab)
 
-# Initialize a new tokenizer with "frozen" vocabulary.
-#tokenizer = Tokenizer(BPE()) 
-#tokenizer.normalizer = Lowercase()
-#tokenizer.pre_tokenizer = CharDelimiterSplit(' ')
+    # Initialize a new tokenizer with "frozen" vocabulary.
+    #tokenizer = Tokenizer(BPE()) 
+    #tokenizer.normalizer = Lowercase()
+    #tokenizer.pre_tokenizer = CharDelimiterSplit(' ')
 
-tokenizer = BertWordPieceTokenizer(vocab=vocab)
-tokenizer.pre_tokenizer = Sequence([Whitespace()])
+    init_tokenizer = BertWordPieceTokenizer(vocab=vocab)
+    init_tokenizer.pre_tokenizer = Sequence([Whitespace()])
+
+    # Save the created tokenizer.
+    init_tokenizer.save(goals_tokenizer_path)
+
+# Load the tokenizer.
+tokenizer = Tokenizer.from_file(goals_tokenizer_path)
 
 #tokenizer.train([ symbolic_goals ], vocab_size=100)
 print(f"\nFinal tokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
@@ -88,11 +95,8 @@ def compare(filename, debug=False):
                         diffs += 1
 
     if diffs > 0:
-        print(f"Decoding is DIFFERENT for '{filename}' = {diffs} / {total}")
+        print(f"Decoding: DIFFERENCES for '{filename}' = {diffs} / {total}")
     else:
-        print("Decoding OK")
+        print(f"Decoding: ALL {total} OK")
 
 compare(symbolic_goals, debug=True)
-
-# And finally save it somewhere
-#tokenizer.save("./path/to/directory/my-bpe.tokenizer.json")

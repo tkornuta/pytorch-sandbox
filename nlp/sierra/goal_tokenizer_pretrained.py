@@ -64,6 +64,3 @@ def compare(filename, debug=False):
         print("Decoding OK")
 
 compare(symbolic_goals, debug=False)
-
-# And finally save it somewhere
-#tokenizer.save("./path/to/directory/my-bpe.tokenizer.json")

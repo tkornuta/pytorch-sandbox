@@ -6,12 +6,13 @@ import json
 from tokenizers import Tokenizer
 from tokenizers import BertWordPieceTokenizer
 from tokenizers.pre_tokenizers import Whitespace
+from transformers import PreTrainedTokenizerFast
 
 # Files with goals.
 brain_path = "/home/tkornuta/data/brain2"
 processed_path = os.path.join(brain_path, "processed")
 symbolic_goals = os.path.join(processed_path, "symbolic_goals.csv")
-goals_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.decoder_tokenizer.json")
+decoder_tokenizer_path = os.path.join("leonardo_sierra.decoder_tokenizer.json")
 
 init = True
 if init:
@@ -39,10 +40,12 @@ if init:
     init_tokenizer.pre_tokenizer = Whitespace()
 
     # Save the created tokenizer.
-    init_tokenizer.save(goals_tokenizer_path)
+    init_tokenizer.save(decoder_tokenizer_path)
 
-# Load the tokenizer.
-tokenizer = Tokenizer.from_file(goals_tokenizer_path)
+# Load the HF.tokenisers tokenizer.
+loaded_tokenizer = Tokenizer.from_file(decoder_tokenizer_path)
+# "Wrap" it with HF.transformers tokenizer.
+tokenizer = PreTrainedTokenizerFast(tokenizer_object=loaded_tokenizer)
 
 print(f"\nFinal tokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
 for k, v in tokenizer.get_vocab().items():
@@ -57,9 +60,7 @@ print("PREPROCESSED INPUT: ", input)
 encoded = tokenizer.encode(input)#, return_tensors="pt")
 print(encoded)
 
-print(encoded.ids)
-print(encoded.tokens)
-print("DECODED: ", tokenizer.decode(encoded.ids))
+print("DECODED: ", tokenizer.decode(encoded, skip_special_tokens=True))
 
 # Unit testing ;)
 def compare(filename, debug=False):
@@ -86,7 +87,7 @@ def compare(filename, debug=False):
                     input = input.replace("  ", " ")
                     input = input.strip()
 
-                    decoded = tokenizer.decode(encoded.ids)
+                    decoded = tokenizer.decode(encoded, skip_special_tokens=True)
                     if input != decoded:
                         if debug:
                             print(f"{input} !=\n{decoded}")

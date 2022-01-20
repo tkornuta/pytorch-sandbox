@@ -59,7 +59,10 @@ def compare(filename, debug=False):
                             #import pdb;pdb.set_trace()
                         diffs += 1
 
-    print(f"Decoding is DIFFERENT for '{filename}' = {diffs} / {total}")
+    if diffs > 0:
+        print(f"Decoding: DIFFERENCES for '{filename}' = {diffs} / {total}")
+    else:
+        print(f"Decoding: ALL {total} OK")
 
 compare(command_templates, debug=False)
 compare(command_humans, debug=True)

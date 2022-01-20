@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
+# based on: https://huggingface.co/docs/transformers/fast_tokenizers -> WRAPPER!!
 
 import os
 import csv
@@ -43,9 +44,12 @@ if init:
     init_tokenizer.save(decoder_tokenizer_path)
 
 # Load the HF.tokenisers tokenizer.
-loaded_tokenizer = Tokenizer.from_file(decoder_tokenizer_path)
+#loaded_tokenizer = Tokenizer.from_file(decoder_tokenizer_path)
 # "Wrap" it with HF.transformers tokenizer.
-tokenizer = PreTrainedTokenizerFast(tokenizer_object=loaded_tokenizer)
+#tokenizer = PreTrainedTokenizerFast(tokenizer_object=loaded_tokenizer)
+
+# Load from tokenizer file
+tokenizer = PreTrainedTokenizerFast(tokenizer_file=decoder_tokenizer_path)
 
 print(f"\nFinal tokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
 for k, v in tokenizer.get_vocab().items():

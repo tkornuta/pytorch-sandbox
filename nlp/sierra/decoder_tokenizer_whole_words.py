@@ -6,6 +6,7 @@ import csv
 import json
 from tokenizers import Tokenizer
 from tokenizers import BertWordPieceTokenizer
+from tokenizers.normalizers import Sequence, Replace, BertNormalizer
 from tokenizers.pre_tokenizers import Whitespace
 from transformers import PreTrainedTokenizerFast
 
@@ -13,31 +14,36 @@ from transformers import PreTrainedTokenizerFast
 brain_path = "/home/tkornuta/data/brain2"
 processed_path = os.path.join(brain_path, "processed")
 symbolic_goals = os.path.join(processed_path, "symbolic_goals.csv")
-decoder_tokenizer_path = os.path.join("leonardo_sierra.decoder_tokenizer.json")
+decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.decoder_tokenizer.json")
 
 init = True
 if init:
     # Load "unified decoder vocabulary" (goals + plans).
     vocab_file = "/home/tkornuta/data/brain2/models/model_goal/dec_vocab.json"
     with open(vocab_file) as f:
-        vocab = json.load(f)
-    print(f"Loaded vocabulary ({len(vocab)}):\n" + "-"*50)
-    for k, v in vocab.items():
+        words = json.load(f)
+    print(f"Loaded vocabulary ({len(words)}):\n" + "-"*50)
+    for k, v in words.items():
         print(k, ": ", v)
 
-    # Extend vocab with the required special tokens.
-    vocab["[UNK]"] = len(vocab)
-    vocab["[SEP]"] = len(vocab)
-    vocab["[CLS]"] = len(vocab)
-    vocab["[PAD]"] = len(vocab)
-    vocab["[MASK]"] = len(vocab)
-
+    # Start vocabulary with all standard special tokens. (PAD=0!)
+    vocab = {}
+    for special_token in ["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]", "[BOS]", "[EOS]"]:
+        vocab[special_token] = len(vocab)
+    
+    # Copy words - but skip '<NONE>': 7, '<START>': 8, '<END>'!
+    for k in words.keys():
+        if k in ['<NONE>', '<START>', '<END>']:
+            continue
+        vocab[k] = len(vocab)
+    
     # Initialize a new tokenizer with "frozen" vocabulary.
     #tokenizer = Tokenizer(BPE()) 
     #tokenizer.normalizer = Lowercase()
     #tokenizer.pre_tokenizer = CharDelimiterSplit(' ')
 
     init_tokenizer = BertWordPieceTokenizer(vocab=vocab)
+    init_tokenizer.normalizer = Sequence([Replace("(", " ( "), Replace(")", " ) "), BertNormalizer()])
     init_tokenizer.pre_tokenizer = Whitespace()
 
     # Save the created tokenizer.
@@ -58,8 +64,8 @@ for k, v in tokenizer.get_vocab().items():
 input = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
 print("INPUT: ", input)
 # Preprocessing required to the pre_tokenizer to work properly.
-input = input.replace(",", " ")
-print("PREPROCESSED INPUT: ", input)
+#input = input.replace(",", " ")
+#print("PREPROCESSED INPUT: ", input)
 
 encoded = tokenizer.encode(input)#, return_tensors="pt")
 print(encoded)
@@ -80,7 +86,7 @@ def compare(filename, debug=False):
                         continue
                     total += 1 
                     # Preprocessing required to the pre_tokenizer to work properly.
-                    input = input.replace(",", " ")
+                    #input = input.replace(",", " ")
                     # "Custom" processing for comparison - remove commas and three dots.
                     input = input.strip()
                     # Encode and decode.

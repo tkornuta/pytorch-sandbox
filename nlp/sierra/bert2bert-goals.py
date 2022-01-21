@@ -115,6 +115,7 @@ decoder_tokenizer.add_special_tokens({'cls_token': '[CLS]'})
 decoder_tokenizer.add_special_tokens({'mask_token': '[MASK]'})
 decoder_tokenizer.add_special_tokens({'bos_token': '[BOS]'})
 decoder_tokenizer.add_special_tokens({'eos_token': '[EOS]'})
+# decoder_tokenizer.model_max_length=512 ??
 
 # leverage checkpoints for Bert2Bert model...
 # use BERT's cls token as BOS token and sep token as EOS token
@@ -155,8 +156,8 @@ sierra_dl = DataLoader(sierra_ds, batch_size=256, shuffle=True, num_workers=2)
 optimizer = torch.optim.Adam(bert2bert.parameters(), lr=0.000001)
 bert2bert.cuda()
 
-for epoch in tqdm(range(20)):
-    print("*"*100)
+for epoch in range(30):
+    print("*"*50, "Epoch", epoch, "*"*50)
     for batch in tqdm(sierra_dl):
         # tokenize commands and goals.
         inputs = encoder_tokenizer(batch["command_humans"], add_special_tokens=True, return_tensors="pt", padding=True, truncation=True)
@@ -178,6 +179,7 @@ for epoch in tqdm(range(20)):
         # Update mode.
         optimizer.step()
 
+    print("*"*50, "Sanity check at the end of Epoch", epoch, "*"*50)
     # Sample.
     command = "Separate the given stack to form blue, red and yellow blocks stack."
     goals = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
@@ -189,7 +191,7 @@ for epoch in tqdm(range(20)):
     print("Inputs tokenized: ", inputs)
 
     goals_tokenized = decoder_tokenizer(command, add_special_tokens=True, return_tensors="pt")
-    print("Target tokenized: ", goals)
+    print("Target tokenized: ", goals_tokenized)
 
     # Move inputs to GPU.
     for key,item in inputs.items():
@@ -199,5 +201,5 @@ for epoch in tqdm(range(20)):
     # Generate output:
     greedy_output = bert2bert.generate(inputs.input_ids, max_length=50)
     #print(f"Output ({greedy_output.shape}): {greedy_output}")
-    print(f"Prediction: `{decoder_tokenizer.decode(greedy_output[0], skip_special_tokens=False)}`")
+    print(f"\nModel prediction: `{decoder_tokenizer.decode(greedy_output[0], skip_special_tokens=False)}`\n")
 

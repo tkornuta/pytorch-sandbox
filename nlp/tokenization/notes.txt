@@ -1,0 +1,71 @@
+Original bert decoder embeddings:
+---------------------------------
+decoder = BertGenerationDecoder.from_pretrained("bert-large-uncased", add_cross_attention=True, is_decoder=True, bos_token_id=101, eos_token_id=102)
+
+(Pdb)  bert2bert.decoder.bert.embeddings
+BertGenerationEmbeddings(
+  (word_embeddings): Embedding(30522, 1024, padding_idx=0)
+  (position_embeddings): Embedding(512, 1024)
+  (LayerNorm): LayerNorm((1024,), eps=1e-12, elementwise_affine=True)
+  (dropout): Dropout(p=0.1, inplace=False)
+)
+
+# decoder.resize_token_embeddings(30522)
+
+Original bert decoder embeddings - with resized embeddings:
+---------------------------------
+decoder = BertGenerationDecoder.from_pretrained("bert-large-uncased", add_cross_attention=True, is_decoder=True, bos_token_id=101, eos_token_id=102)
+decoder.resize_token_embeddings(len(decoder_tokenizer))
+
+(Pdb) bert2bert.decoder.bert.embeddings
+BertGenerationEmbeddings(
+  (word_embeddings): Embedding(58, 1024)
+  (position_embeddings): Embedding(512, 1024)
+  (LayerNorm): LayerNorm((1024,), eps=1e-12, elementwise_affine=True)
+  (dropout): Dropout(p=0.1, inplace=False)
+)
+
+# decoder.resize_position_embeddings(len(decoder_tokenizer))
+# `resize_position_embeddings` is not implemented for <class 'transformers.models.bert_generation.modeling_bert_generation.BertGenerationDecoder'>
+
+
+
+(Pdb) bert2bert.decoder.bert.embeddings
+BertGenerationEmbeddings(
+  (word_embeddings): Embedding(58, 768, padding_idx=56)
+  (position_embeddings): Embedding(512, 768)
+  (LayerNorm): LayerNorm((768,), eps=1e-12, elementwise_affine=True)
+  (dropout): Dropout(p=0.1, inplace=False)
+)
+
+
+https://huggingface.co/transformers/v2.11.0/_modules/transformers/tokenization_utils.html#PreTrainedTokenizer.add_tokens
+class SpecialTokensMixin:
+    """ SpecialTokensMixin is derived by ``PreTrainedTokenizer`` and ``PreTrainedTokenizerFast`` and
+        handles specific behaviors related to special tokens. In particular, this class hold the
+        attributes which can be used to directly access to these special tokens in a
+        model-independant manner and allow to set and update the special tokens.
+    """
+
+    SPECIAL_TOKENS_ATTRIBUTES = [
+        "bos_token",
+        "eos_token",
+        "unk_token",
+        "sep_token",
+        "pad_token",
+        "cls_token",
+        "mask_token",
+        "additional_special_tokens",
+    ]
+
+    def __init__(self, **kwargs):
+        self._bos_token = None
+        self._eos_token = None
+        self._unk_token = None
+        self._sep_token = None
+        self._pad_token = None
+        self._cls_token = None
+        self._mask_token = None
+        self._pad_token_type_id = 0
+        self._additional_special_tokens = []
+

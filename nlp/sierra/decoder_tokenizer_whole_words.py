@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # based on: https://huggingface.co/docs/transformers/fast_tokenizers -> WRAPPER!!
 
+from base64 import encode
 import os
 import csv
 import json
@@ -42,20 +43,38 @@ if init:
     #tokenizer.normalizer = Lowercase()
     #tokenizer.pre_tokenizer = CharDelimiterSplit(' ')
 
-    init_tokenizer = BertWordPieceTokenizer(vocab=vocab)
+    init_tokenizer = BertWordPieceTokenizer(vocab=vocab) 
+        #bos_token = "[CLS]", eos_token = "[SEP]", unk_token = "[UNK]", sep_token = "[SEP]",
+        #pad_token = "[PAD]", cls_token = "[CLS]", mask_token = "[MASK]",
+    #init_tokenizer.add_special_tokens(["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]", "[BOS]", "[EOS]"])
     init_tokenizer.normalizer = Sequence([Replace("(", " ( "), Replace(")", " ) "), BertNormalizer()])
     init_tokenizer.pre_tokenizer = Whitespace()
+
+    # "Set" special tokens?
+    #init_tokenizer.bos_token_id = vocab["[CLS]"]
+    #init_tokenizer.eos_token_id = vocab["[SEP]"]
+    #init_tokenizer.unk_token_id = vocab["[UNK]"]
+    #init_tokenizer.sep_token_id = vocab["[SEP]"]
+    #init_tokenizer.pad_token_id = vocab["[PAD]"]
+    #init_tokenizer.cls_token_id = vocab["[CLS]"]
+    #init_tokenizer.mask_token_id = vocab["[MASK]"]
 
     # Save the created tokenizer.
     init_tokenizer.save(decoder_tokenizer_path)
 
-# Load the HF.tokenisers tokenizer.
+    #input = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
+    #print("INPUT: ", input)
+    #encoded = init_tokenizer.encode(input)
+    #print(encoded) <- SPECIAL TOKENS ALREADY THERE!!
+
+# Load the HF.tokenizers tokenizer.
 #loaded_tokenizer = Tokenizer.from_file(decoder_tokenizer_path)
 # "Wrap" it with HF.transformers tokenizer.
 #tokenizer = PreTrainedTokenizerFast(tokenizer_object=loaded_tokenizer)
 
 # Load from tokenizer file
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=decoder_tokenizer_path)
+import pdb;pdb.set_trace()
 
 print(f"\nFinal tokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
 for k, v in tokenizer.get_vocab().items():
@@ -63,9 +82,6 @@ for k, v in tokenizer.get_vocab().items():
 
 input = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
 print("INPUT: ", input)
-# Preprocessing required to the pre_tokenizer to work properly.
-#input = input.replace(",", " ")
-#print("PREPROCESSED INPUT: ", input)
 
 encoded = tokenizer.encode(input)#, return_tensors="pt")
 print(encoded)
@@ -86,7 +102,7 @@ def compare(filename, debug=False):
                         continue
                     total += 1 
                     # Preprocessing required to the pre_tokenizer to work properly.
-                    #input = input.replace(",", " ")
+                    input = input.replace(",", " ")
                     # "Custom" processing for comparison - remove commas and three dots.
                     input = input.strip()
                     # Encode and decode.
@@ -109,4 +125,4 @@ def compare(filename, debug=False):
     else:
         print(f"Decoding: ALL {total} OK")
 
-compare(symbolic_goals, debug=True)
+compare(symbolic_goals, debug=False)

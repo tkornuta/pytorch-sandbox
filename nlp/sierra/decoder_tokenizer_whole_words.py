@@ -44,12 +44,20 @@ if init:
     #tokenizer.pre_tokenizer = CharDelimiterSplit(' ')
 
     init_tokenizer = BertWordPieceTokenizer(vocab=vocab) 
-        #bos_token = "[CLS]", eos_token = "[SEP]", unk_token = "[UNK]", sep_token = "[SEP]",
-        #pad_token = "[PAD]", cls_token = "[CLS]", mask_token = "[MASK]",
-    #init_tokenizer.add_special_tokens(["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]", "[BOS]", "[EOS]"])
+        #special_tokens=["[UNK]", "[CLS]", "[SEP]", "[PAD]", "[MASK]"])  <- wrong keyword
+
+        #bos_token = "[CLS]", eos_token = "[SEP]", unk_token = "[UNK]", sep_token = "[SEP]", <- wrong keywords
+        #pad_token = "[PAD]", cls_token = "[CLS]", mask_token = "[MASK]", <- wrong keywords
+
     init_tokenizer.normalizer = Sequence([Replace("(", " ( "), Replace(")", " ) "), BertNormalizer()])
     init_tokenizer.pre_tokenizer = Whitespace()
 
+    #init_tokenizer.add_special_tokens({'pad_token': '[PAD]'}) <- must be list
+    #init_tokenizer.add_special_tokens(["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]", "[BOS]", "[EOS]"]) <- doesn't work
+    #init_tokenizer.add_special_tokens(['[PAD]']) # <- doesn't work
+    #init_tokenizer.pad_token = "[PAD]" # <- doesn't work
+    init_tokenizer.pad_token_id = vocab["[PAD]"]
+    
     # "Set" special tokens?
     #init_tokenizer.bos_token_id = vocab["[CLS]"]
     #init_tokenizer.eos_token_id = vocab["[SEP]"]
@@ -74,7 +82,8 @@ if init:
 
 # Load from tokenizer file
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=decoder_tokenizer_path)
-import pdb;pdb.set_trace()
+#tokenizer.add_special_tokens({'pad_token': '[PAD]'}) <- this works!
+#tokenizer.pad_token
 
 print(f"\nFinal tokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
 for k, v in tokenizer.get_vocab().items():
@@ -83,7 +92,7 @@ for k, v in tokenizer.get_vocab().items():
 input = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
 print("INPUT: ", input)
 
-encoded = tokenizer.encode(input)#, return_tensors="pt")
+encoded = tokenizer.encode(input) #, padding=True, truncation=True)#, return_tensors="pt")
 print(encoded)
 
 print("DECODED: ", tokenizer.decode(encoded, skip_special_tokens=True))

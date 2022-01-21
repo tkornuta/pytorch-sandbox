@@ -63,7 +63,8 @@ bert2bert.config.pad_token_id=decoder_tokenizer.vocab["[PAD]"]
 # Tokenize inputs and labels.
 inputs = encoder_tokenizer('Make a stack of all blocks except the green block.', add_special_tokens=False, return_tensors="pt")
 print("Inputs: ", inputs)
-labels = decoder_tokenizer("has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)", return_tensors="pt")
+labels = decoder_tokenizer("has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)",
+    return_tensors="pt", padding=True, truncation=True)
 
 
 # train...

@@ -79,22 +79,21 @@ if init:
     for w in words:
         vocab[w] = len(vocab)
 
-    
     # New tokenizer.
     init_tokenizer = BertWordPieceTokenizer(vocab=vocab) 
     init_tokenizer.normalizer = Sequence([Replace("(", " ( "), Replace(")", " ) "), BertNormalizer()])
     init_tokenizer.pre_tokenizer = Whitespace()
     init_tokenizer.pad_token_id = vocab["[PAD]"]
-    
 
     # Save the created tokenizer.
     init_tokenizer.save(decoder_tokenizer_path)
 
-# Load from tokenizer file
+# Load from tokenizer file.
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=decoder_tokenizer_path)
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+import pdb;pdb.set_trace()
 
-print(f"\nFinal tokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
+print(f"\Tokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
 for k, v in tokenizer.get_vocab().items():
     print(k, ": ", v)
 

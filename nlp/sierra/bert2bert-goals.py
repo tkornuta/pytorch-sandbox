@@ -22,7 +22,7 @@ from transformers import BertConfig
 
 brain_path = "/home/tkornuta/data/brain2"
 sierra_path = os.path.join(brain_path, "leonardo_sierra")
-decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.decoder_tokenizer.json")
+decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.goals_decoder_tokenizer.json")
 
 class SierraDataset(Dataset):
     """Face Landmarks dataset."""
@@ -41,6 +41,8 @@ class SierraDataset(Dataset):
         self.command_humans = []
         self.symbolic_plans = []
         self.symbolic_goals = []
+        self.symbolic_goals_values = []
+        self.symbolic_goals_with_negation = []
 
         # Get files.
         sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
@@ -77,12 +79,46 @@ class SierraDataset(Dataset):
             #print("Symbolic Goal: ", h5["sym_goal"][()], '\n')
             self.symbolic_goals.append(h5["sym_goal"][()])
 
+            #print("Symbolic Goal values: ", h5["sym_goal"][()], '\n')
+            self.symbolic_goals_values.append(h5["sym_values"][()])
+
+            #print("Symbolic Goal values: ", h5["sym_goal"][()], '\n')
+            self.symbolic_goals_with_negation.append(self.process_goals(self.symbolic_goals[-1], self.symbolic_goals_values[-1], return_string=True))
+
         # Make sure all lenths are the same.
         assert len(self.command_humans) == len(self.symbolic_plans)
         assert len(self.command_humans) == len(self.symbolic_goals)
+        assert len(self.command_humans) == len(self.symbolic_goals_with_negation)
 
     def __len__(self):
         return len(self.sample_names)
+
+    @classmethod
+    def process_goals(cls, symbolic_goals, symbolic_goals_values, return_string = False):
+        # Split goals and goal values.
+        symbolic_goals = symbolic_goals.split("),")
+
+        # Make sure both lists have equal number of elements.
+        assert len(symbolic_goals) == len(symbolic_goals_values)
+
+        tokenized_goals = []
+        for goal, value in zip(symbolic_goals, symbolic_goals_values):
+            # Add removed "),"
+            if goal[-1] != ")":
+                goal = goal + "),"
+            # "Tokenize" goals.
+            tokenized_goal = goal.replace("(", " ( ").replace(")", " ) ").replace(",", " , ").split()
+
+            # Add "not" token when required.
+            if not value:
+                tokenized_goal = ["not"] + tokenized_goal
+            
+            tokenized_goals.extend(tokenized_goal)
+
+        if return_string:
+            return " ".join(tokenized_goals)
+        else:
+            return tokenized_goals
 
     def __getitem__(self, idx):
         # Get command.
@@ -99,13 +135,14 @@ class SierraDataset(Dataset):
             "command_humans": command_humans,
             "symbolic_plans": self.symbolic_plans[idx],
             "symbolic_goals": self.symbolic_goals[idx],
-
+            "symbolic_goals_with_negation": self.symbolic_goals_with_negation[idx],
         }
 
         return sample
 
 # Load original BERT Ttokenizer.
 encoder_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
 # Load decoder operating on the Sierra PDDL language.
 decoder_tokenizer = PreTrainedTokenizerFast(tokenizer_file=decoder_tokenizer_path)
 decoder_tokenizer.add_special_tokens({'unk_token': '[UNK]'})
@@ -115,6 +152,9 @@ decoder_tokenizer.add_special_tokens({'cls_token': '[CLS]'})
 decoder_tokenizer.add_special_tokens({'mask_token': '[MASK]'})
 decoder_tokenizer.add_special_tokens({'bos_token': '[BOS]'})
 decoder_tokenizer.add_special_tokens({'eos_token': '[EOS]'})
+#print(f"\Decoder tokenizer vocabulary ({len(decoder_tokenizer.get_vocab())}):\n" + "-"*50)
+#for k, v in decoder_tokenizer.get_vocab().items():
+#    print(k, ": ", v)
 # decoder_tokenizer.model_max_length=512 ??
 
 # leverage checkpoints for Bert2Bert model...
@@ -161,7 +201,7 @@ for epoch in range(30):
     for batch in tqdm(sierra_dl):
         # tokenize commands and goals.
         inputs = encoder_tokenizer(batch["command_humans"], add_special_tokens=True, return_tensors="pt", padding=True, truncation=True)
-        labels = decoder_tokenizer(batch["symbolic_goals"], return_tensors="pt", padding=True, truncation=True, add_special_tokens=True, )
+        labels = decoder_tokenizer(batch["symbolic_goals_with_negation"], return_tensors="pt", padding=True, truncation=True, add_special_tokens=True, )
         # Move to GPU.
         for key,item in inputs.items():
             if type(item).__name__ == "Tensor":
@@ -183,6 +223,8 @@ for epoch in range(30):
     # Sample.
     command = "Separate the given stack to form blue, red and yellow blocks stack."
     goals = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
+    values = [False, True, True, False]
+    goals = SierraDataset.process_goals(goals, values, return_string=True)
     print("Command: ", command)
     print("Target: ", goals)
 
@@ -190,8 +232,9 @@ for epoch in range(30):
     inputs = encoder_tokenizer(command, add_special_tokens=True, return_tensors="pt")
     print("Inputs tokenized: ", inputs)
 
-    goals_tokenized = decoder_tokenizer(command, add_special_tokens=True, return_tensors="pt")
+    goals_tokenized = decoder_tokenizer(goals, add_special_tokens=True, return_tensors="pt")
     print("Target tokenized: ", goals_tokenized)
+    print(f"\nTarget: `{decoder_tokenizer.decode(goals_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
     # Move inputs to GPU.
     for key,item in inputs.items():

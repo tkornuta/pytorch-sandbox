@@ -7,10 +7,10 @@ from copy import deepcopy
 brain_path = "/home/tkornuta/data/brain2"
 sierra_path = os.path.join(brain_path, "leonardo_sierra")
 processed_path = os.path.join(brain_path, "processed")
-tokenizer_path = os.path.join(brain_path, "leonardo_sierra.decoder_tokenizer.json")
+decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.goals_decoder_tokenizer.json")
 
 # Load the tokenizer.
-tokenizer = Tokenizer.from_file(tokenizer_path)
+tokenizer = Tokenizer.from_file(decoder_tokenizer_path)
 
 tokens = deepcopy(tokenizer.get_vocab())
 print(f"Tokenizer vocabulary ({len(tokens)}):\n" + "-"*50)
@@ -40,7 +40,7 @@ while len(tokens) > 0:
     if token in ["(", ")", ","]:
         token_mapping[token] = "punctuation" # token_types["punctuation"]
 
-    elif token in ["true", "false"]:
+    elif token in ["true", "false", "not"]:
         token_mapping[token] = "bool"
 
     elif (token[0] == "<" and token[-1] == ">") or (token[0] == "[" and token[-1] == "]"):
@@ -78,4 +78,4 @@ def save_to(name, list_to_save):
 
     print(f"List saved to `{filename}`")
 
-#save_to("sample_names.csv", sample_names)
+save_to("goals_decoder_token_classes.csv", decoder_tokenizer_path)

@@ -124,21 +124,13 @@ def compare(debug=False):
         #print("Symbolic Goal: ", h5["sym_goal"][()], '\n')
         symbolic_goals_values = h5["sym_values"][()]
 
-        # Process goals.
+        # Preprocessing required to the pre_tokenizer to work properly.
         input = process_goals(symbolic_goals, symbolic_goals_values, return_string=True)
 
-        total += 1 
-        # Preprocessing required to the pre_tokenizer to work properly.
-        #input = input.replace(",", " ")
-        # "Custom" processing for comparison - remove commas and three dots.
-        #input = input.strip()
         # Encode and decode.
         encoded = tokenizer.encode(input)
         # Custom postprocessing
         #input = input.replace("(", " ( ")
-        #input = input.replace(")", " ) ")
-        #input = input.replace("  ", " ")
-        #input = input.strip()
 
         decoded = tokenizer.decode(encoded, skip_special_tokens=True)
         if input != decoded:
@@ -146,6 +138,7 @@ def compare(debug=False):
                 print(f"{input} !=\n{decoded}")
                 import pdb;pdb.set_trace()
             diffs += 1
+        total += 1 
 
     if diffs > 0:
         print(f"Decoding: DIFFERENCES for '{filename}' = {diffs} / {total}")

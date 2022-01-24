@@ -3,8 +3,6 @@
 # https://arxiv.org/pdf/1907.12461.pdf
 # https://huggingface.co/docs/transformers/model_doc/bertgeneration
 # https://medium.com/huggingface/encoder-decoders-in-transformers-a-hybrid-pre-trained-architecture-for-seq2seq-af4d7bf14bb8
-
-# SPDX-License-Identifier: Apache-2.0
 # based on: https://huggingface.co/docs/transformers/v4.15.0/en/internal/tokenization_utils#transformers.SpecialTokensMixin
 
 import os

@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 brain_path = "/home/tkornuta/data/brain2"
 sierra_path = os.path.join(brain_path, "leonardo_sierra")
+sierra_path = os.path.join(brain_path, "leonardo_sierra")
 processed_path = os.path.join(brain_path, "processed")
 
 # Get files.
@@ -26,6 +27,7 @@ command_templates = []
 command_humans = []
 symbolic_plans = []
 symbolic_goals = []
+symbolic_goals_values = []
 
 # Open files one by one.
 for filename in tqdm(sierra_files):
@@ -52,6 +54,9 @@ for filename in tqdm(sierra_files):
     #print("Symbolic Goal: ", h5["sym_goal"][()], '\n')
     symbolic_goals.append(h5["sym_goal"][()])
 
+    #print("Symbolic Goal: ", h5["sym_goal"][()], '\n')
+    symbolic_goals_values.append(h5["sym_values"][()])
+
     #import pdb;pdb.set_trace()
 
 # Save to files.
@@ -63,10 +68,10 @@ def save_to(name, list_to_save):
         for obj in list_to_save:
             if type(obj) is list:
                 for item in obj:
-                    f.write(item + ';')
+                    f.write(str(item) + ';')
                 f.write('\n')
             else:
-                f.write(obj + ';\n')
+                f.write(str(obj) + ';\n')
 
     print(f"List saved to `{filename}`")
 
@@ -75,3 +80,4 @@ save_to("command_templates.csv", command_templates)
 save_to("command_humans.csv", command_humans)
 save_to("symbolic_plans.csv", symbolic_plans)
 save_to("symbolic_goals.csv", symbolic_goals)
+save_to("symbolic_goals_values.csv", symbolic_goals_values)

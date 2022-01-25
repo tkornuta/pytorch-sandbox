@@ -16,32 +16,7 @@ brain_path = "/home/tkornuta/data/brain2"
 sierra_path = os.path.join(brain_path, "leonardo_sierra")
 decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.goals_decoder_tokenizer.json")
 
-def process_goals(symbolic_goals, symbolic_goals_values, return_string = False):
-    # Split goals and goal values.
-    symbolic_goals = symbolic_goals.split("),")
-
-    # Make sure both lists have equal number of elements.
-    assert len(symbolic_goals) == len(symbolic_goals_values)
-
-    tokenized_goals = []
-    for goal, value in zip(symbolic_goals, symbolic_goals_values):
-        # Add removed "),"
-        if goal[-1] != ")":
-            goal = goal + "),"
-        # "Tokenize" goals.
-        tokenized_goal = goal.replace("(", " ( ").replace(")", " ) ").replace(",", " , ").split()
-
-        # Add "not" token when required.
-        if not value:
-            tokenized_goal = ["not"] + tokenized_goal
-        
-        tokenized_goals.extend(tokenized_goal)
-
-    if return_string:
-        return " ".join(tokenized_goals)
-    else:
-        return tokenized_goals
-
+from sierra_dataset import SierraDataset
 
 init = True
 if init:
@@ -63,7 +38,7 @@ if init:
         symbolic_goals_values = h5["sym_values"][()]
 
         # Process goals.
-        tokenized_goals = process_goals(symbolic_goals, symbolic_goals_values)
+        tokenized_goals = SierraDataset.process_goals(symbolic_goals, symbolic_goals_values)
 
         for tg in tokenized_goals:
             words.add(tg)
@@ -91,15 +66,14 @@ if init:
 # Load from tokenizer file.
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=decoder_tokenizer_path)
 tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-import pdb;pdb.set_trace()
 
-print(f"\Tokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
+print(f"\nTokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
 for k, v in tokenizer.get_vocab().items():
     print(k, ": ", v)
 
 goals = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
 values = [False, True, True, False]
-input = process_goals(goals, values, return_string=True)
+input = SierraDataset.process_goals(goals, values, return_string=True)
 
 print("INPUT: ", input)
 
@@ -125,12 +99,12 @@ def compare(debug=False):
         symbolic_goals_values = h5["sym_values"][()]
 
         # Preprocessing required to the pre_tokenizer to work properly.
-        input = process_goals(symbolic_goals, symbolic_goals_values, return_string=True)
+        input = SierraDataset.process_goals(symbolic_goals, symbolic_goals_values, return_string=True)
 
         # Encode and decode.
         encoded = tokenizer.encode(input)
-        # Custom postprocessing
-        #input = input.replace("(", " ( ")
+        # Custom postprocessing - remove space before the comma.
+        input = input.replace(" ,", ",")
 
         decoded = tokenizer.decode(encoded, skip_special_tokens=True)
         if input != decoded:
@@ -145,4 +119,4 @@ def compare(debug=False):
     else:
         print(f"Decoding: ALL {total} OK")
 
-compare(debug=False)
+compare(debug=True)

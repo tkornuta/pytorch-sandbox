@@ -19,9 +19,18 @@ from transformers import BertConfig
 
 from sierra_dataset import SierraDataset
 
+# TOKENIZER & PROCESSING
+tokenizer_name = "leonardo_sierra.goals_decoder_tokenizer_sep.json"
+process_goals = SierraDataset.process_goals_sep
+# For dataset.
+goals_sep = True
+# Add special tokens - for decoder only!
+add_special_tokens = False
+
+# Paths.
 brain_path = "/home/tkornuta/data/brain2"
 sierra_path = os.path.join(brain_path, "leonardo_sierra")
-decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.goals_decoder_tokenizer.json")
+decoder_tokenizer_path = os.path.join(brain_path, tokenizer_name)
 
 # Load original BERT Ttokenizer.
 encoder_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -41,7 +50,7 @@ decoder_tokenizer.add_special_tokens({'eos_token': '[EOS]'})
 # decoder_tokenizer.model_max_length=512 ??
 
 # Create dataset/dataloader.
-sierra_ds = SierraDataset(brain_path=brain_path)
+sierra_ds = SierraDataset(brain_path=brain_path, goals_sep=goals_sep)
 sierra_dl = DataLoader(sierra_ds, batch_size=256, shuffle=True, num_workers=2)
 
 # leverage checkpoints for Bert2Bert model...
@@ -83,7 +92,7 @@ for epoch in range(30):
     for batch in tqdm(sierra_dl):
         # tokenize commands and goals.
         inputs = encoder_tokenizer(batch["command_humans"], add_special_tokens=True, return_tensors="pt", padding=True, truncation=True)
-        labels = decoder_tokenizer(batch["symbolic_goals_with_negation"], return_tensors="pt", padding=True, truncation=True, add_special_tokens=True, )
+        labels = decoder_tokenizer(batch["symbolic_goals_with_negation"], return_tensors="pt", padding=True, truncation=True, add_special_tokens=add_special_tokens)
         # Move to GPU.
         for key,item in inputs.items():
             if type(item).__name__ == "Tensor":
@@ -106,7 +115,7 @@ for epoch in range(30):
     command = "Separate the given stack to form blue, red and yellow blocks stack."
     goals = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
     values = [False, True, True, False]
-    goals = SierraDataset.process_goals(goals, values, return_string=True)
+    goals = process_goals(goals, values, return_string=True)
     print("Command: ", command)
     print("Target: ", goals)
 
@@ -114,7 +123,7 @@ for epoch in range(30):
     inputs = encoder_tokenizer(command, add_special_tokens=True, return_tensors="pt")
     print("Inputs tokenized: ", inputs)
 
-    goals_tokenized = decoder_tokenizer(goals, add_special_tokens=True, return_tensors="pt")
+    goals_tokenized = decoder_tokenizer(goals, add_special_tokens=add_special_tokens, return_tensors="pt")
     print("Target tokenized: ", goals_tokenized)
     print(f"\nTarget: `{decoder_tokenizer.decode(goals_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
@@ -124,7 +133,7 @@ for epoch in range(30):
             inputs[key] = item.cuda()
 
     # Generate output:
-    greedy_output = bert2bert.generate(inputs.input_ids, max_length=50)
+    greedy_output = bert2bert.generate(inputs.input_ids, max_length=(sierra_ds.max_goals_length + 2))
     #print(f"Output ({greedy_output.shape}): {greedy_output}")
     print(f"\nModel prediction: `{decoder_tokenizer.decode(greedy_output[0], skip_special_tokens=False)}`\n")
 

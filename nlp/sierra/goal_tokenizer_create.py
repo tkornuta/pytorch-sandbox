@@ -11,12 +11,21 @@ from tokenizers.normalizers import Sequence, Replace, BertNormalizer
 from tokenizers.pre_tokenizers import Whitespace
 from transformers import PreTrainedTokenizerFast
 
-# Files with goals.
+from sierra_dataset import SierraDataset
+
+
+# TOKENIZER & PROCESSING
+tokenizer_name = "leonardo_sierra.goals_decoder_tokenizer_sep.json"
+process_goals = SierraDataset.process_goals_sep
+# Add special tokens - for decoder only!
+add_special_tokens = False
+
+
+# Paths.
 brain_path = "/home/tkornuta/data/brain2"
 sierra_path = os.path.join(brain_path, "leonardo_sierra")
-decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.goals_decoder_tokenizer.json")
+decoder_tokenizer_path = os.path.join(brain_path, tokenizer_name)
 
-from sierra_dataset import SierraDataset
 
 init = True
 if init:
@@ -38,7 +47,7 @@ if init:
         symbolic_goals_values = h5["sym_values"][()]
 
         # Process goals.
-        tokenized_goals = SierraDataset.process_goals(symbolic_goals, symbolic_goals_values)
+        tokenized_goals = process_goals(symbolic_goals, symbolic_goals_values)
 
         for tg in tokenized_goals:
             words.add(tg)
@@ -52,20 +61,25 @@ if init:
     for special_token in ["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]", "[BOS]", "[EOS]"]:
         vocab[special_token] = len(vocab)
     for w in words:
-        vocab[w] = len(vocab)
+        if w not in vocab:
+            vocab[w] = len(vocab)
+    print(vocab)
 
     # New tokenizer.
     init_tokenizer = BertWordPieceTokenizer(vocab=vocab) 
     init_tokenizer.normalizer = Sequence([Replace("(", " ( "), Replace(")", " ) "), BertNormalizer()])
     init_tokenizer.pre_tokenizer = Whitespace()
-    init_tokenizer.pad_token_id = vocab["[PAD]"]
+    #init_tokenizer.pad_token_id = vocab["[PAD]"]
+    #print("Created tokenizer: ", init_tokenizer)
 
     # Save the created tokenizer.
     init_tokenizer.save(decoder_tokenizer_path)
 
 # Load from tokenizer file.
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=decoder_tokenizer_path)
-tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+tokenizer.add_special_tokens({'pad_token': '[PAD]', 'cls_token': '[CLS]', 'sep_token': '[SEP]',
+    'unk_token': '[UNK]', 'mask_token': '[MASK]', 'bos_token': '[BOS]', 'eos_token': '[EOS]'
+    })
 
 print(f"\nTokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
 for k, v in tokenizer.get_vocab().items():
@@ -73,14 +87,15 @@ for k, v in tokenizer.get_vocab().items():
 
 goals = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
 values = [False, True, True, False]
-input = SierraDataset.process_goals(goals, values, return_string=True)
+input = process_goals(goals, values, return_string=True)
 
+print("-"*50)
 print("INPUT: ", input)
 
-encoded = tokenizer.encode(input) #, padding=True, truncation=True)#, return_tensors="pt")
+encoded = tokenizer.encode(input, add_special_tokens=add_special_tokens) #, padding=True, truncation=True)#, return_tensors="pt")
 print(encoded)
 
-print("DECODED: ", tokenizer.decode(encoded, skip_special_tokens=True))
+print("DECODED: ", tokenizer.decode(encoded, skip_special_tokens=False))
 
 # Unit testing ;)
 def compare(debug=False):
@@ -99,14 +114,16 @@ def compare(debug=False):
         symbolic_goals_values = h5["sym_values"][()]
 
         # Preprocessing required to the pre_tokenizer to work properly.
-        input = SierraDataset.process_goals(symbolic_goals, symbolic_goals_values, return_string=True)
+        input = process_goals(symbolic_goals, symbolic_goals_values, return_string=True)
 
         # Encode and decode.
-        encoded = tokenizer.encode(input)
+        encoded = tokenizer.encode(input, add_special_tokens=add_special_tokens)
         # Custom postprocessing - remove space before the comma.
         input = input.replace(" ,", ",")
+        if add_special_tokens:
+            input = "[CLS] " + input + " [SEP]"
 
-        decoded = tokenizer.decode(encoded, skip_special_tokens=True)
+        decoded = tokenizer.decode(encoded, skip_special_tokens=False)
         if input != decoded:
             if debug:
                 print(f"{input} !=\n{decoded}")

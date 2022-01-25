@@ -13,7 +13,12 @@ from torch.utils.data import Dataset
 class SierraDataset(Dataset):
     """Dataset for Sierra, loading samples directly from h5 files."""
 
-    def __init__(self, brain_path):
+    def __init__(self, brain_path, goals_sep=False):
+        """Initializes dataset by loading humand commands (from a csv file) and all other data (from h5 files).
+        
+        Args:
+            goals_sep (bool, default: False): if set, uses special preprocessing by removing punctuation and additional [SEP] token after each goal.
+        """
         # Get path to sierra data.
         sierra_path = os.path.join(brain_path, "leonardo_sierra")
 
@@ -73,8 +78,12 @@ class SierraDataset(Dataset):
             #print("Symbolic Goal values: ", h5["sym_goal"][()], '\n')
             self.symbolic_goals_values.append(h5["sym_values"][()])
 
-            #print("Symbolic Goal values: ", h5["sym_goal"][()], '\n')
-            tokenized_goals = self.process_goals(self.symbolic_goals[-1], self.symbolic_goals_values[-1])
+            # Proces symbolic goals, depending on the settings.
+            if goals_sep:
+                tokenized_goals = self.process_goals_sep(self.symbolic_goals[-1], self.symbolic_goals_values[-1])
+            else:
+                tokenized_goals = self.process_goals(self.symbolic_goals[-1], self.symbolic_goals_values[-1])
+
             self.symbolic_goals_with_negation.append(" ".join(tokenized_goals))
 
             #print("Symbolic Plan / Actions: ", h5["sym_plan"][()], '\n')
@@ -100,6 +109,13 @@ class SierraDataset(Dataset):
 
     @classmethod
     def process_goals(cls, symbolic_goals, symbolic_goals_values, return_string = False):
+        """ 
+        Minimalistic goals processing, where all punctuation (brackets, commas) are kept. 
+        Additionally it ads `not` token before a given predicate if the associated goal value is False.
+        
+        Returns:
+            list of str or single string, depending on the return_string flag.
+        """
         # Split goals and goal values.
         symbolic_goals = symbolic_goals.split("),")
 
@@ -126,7 +142,53 @@ class SierraDataset(Dataset):
             return tokenized_goals
 
     @classmethod
+    def process_goals_sep(cls, symbolic_goals, symbolic_goals_values, return_string = False):
+        """ 
+        A more sophisticated goals processing, where:
+        * goals are separated by [SEP]
+        * using [EOS] token after the last goal
+        * all punctuation (brackets, commas) are removed
+        * `not` token is fused with predicate creating new "negative predicate" tokens.
+        
+        Returns:
+            list of str or single string, depending on the return_string flag.
+        """
+        # Split goals and goal values.
+        symbolic_goals = symbolic_goals.split("),")
+
+        # Make sure both lists have equal number of elements.
+        assert len(symbolic_goals) == len(symbolic_goals_values)
+
+        tokenized_goals = []
+        for goal, value in zip(symbolic_goals, symbolic_goals_values):
+            # Add separator everywhere except at the end.
+            if goal[-1] != ")":
+                goal = goal + " [SEP]"
+
+            # Fuse "not" into new token when required.
+            if not value:
+                goal = "not_" + goal
+            
+            # Remove all punctuation and split into tokens
+            goals = goal.replace("(", " ").replace(")", " ").replace(",", " ").split()
+
+            tokenized_goals.extend(goals)
+        
+        # Add EOS at the end.
+        tokenized_goals.extend(["[EOS]"])
+
+        if return_string:
+            return " ".join(tokenized_goals)
+        else:
+            return tokenized_goals
+
+    @classmethod
     def process_plan(cls, symbolic_plan, return_string = False):
+        """ Minimalistic plan processing, where all punctuation (brackets, commas) are kept. 
+        
+        Returns:
+            list of str or single string, depending on the return_string flag.
+        """
         # Split goals and goal values.
         symbolic_plan = symbolic_plan.split("),")
 

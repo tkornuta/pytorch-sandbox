@@ -14,7 +14,6 @@
 # limitations under the License.
 """ Classes to support Encoder-Decoder architectures"""
 
-import copy
 import warnings
 from typing import Optional
 
@@ -28,58 +27,10 @@ from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 from transformers import AutoConfig
 from transformers import AutoModel, AutoModelForCausalLM
+from transformers import EncoderDecoderConfig
 
 
 logger = logging.get_logger(__name__)
-
-
-class EncoderDecoderConfig(PretrainedConfig):
-
-    model_type = "encoder-decoder"
-    is_composition = True
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        assert (
-            "encoder" in kwargs and "decoder" in kwargs
-        ), "Config has to be initialized with encoder and decoder config"
-        encoder_config = kwargs.pop("encoder")
-        encoder_model_type = encoder_config.pop("model_type")
-        decoder_config = kwargs.pop("decoder")
-        decoder_model_type = decoder_config.pop("model_type")
-
-        self.encoder = AutoConfig.for_model(encoder_model_type, **encoder_config)
-        self.decoder = AutoConfig.for_model(decoder_model_type, **decoder_config)
-        self.is_encoder_decoder = True
-
-    @classmethod
-    def from_encoder_decoder_configs(
-        cls, encoder_config: PretrainedConfig, decoder_config: PretrainedConfig, **kwargs
-    ) -> PretrainedConfig:
-        r"""
-        Instantiate a [`EncoderDecoderConfig`] (or a derived class) from a pre-trained encoder model configuration and
-        decoder model configuration.
-        Returns:
-            [`EncoderDecoderConfig`]: An instance of a configuration object
-        """
-        logger.info("Set `config.is_decoder=True` and `config.add_cross_attention=True` for decoder_config")
-        decoder_config.is_decoder = True
-        decoder_config.add_cross_attention = True
-
-        return cls(encoder=encoder_config.to_dict(), decoder=decoder_config.to_dict(), **kwargs)
-
-    def to_dict(self):
-        """
-        Serializes this instance to a Python dictionary. Override the default *to_dict()* from *PretrainedConfig*.
-        Returns:
-            `Dict[str, any]`: Dictionary of all the attributes that make up this configuration instance,
-        """
-        output = copy.deepcopy(self.__dict__)
-        output["encoder"] = self.encoder.to_dict()
-        output["decoder"] = self.decoder.to_dict()
-        output["model_type"] = self.__class__.model_type
-        return output
-
 
 def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start_token_id: int):
     """
@@ -99,7 +50,7 @@ def shift_tokens_right(input_ids: torch.Tensor, pad_token_id: int, decoder_start
     return shifted_input_ids
 
 
-class EncoderDecoderModel(PreTrainedModel):
+class MultimodalEncoderDecoderModel(PreTrainedModel):
     r"""
     [`EncoderDecoderModel`] is a generic model class that will be instantiated as a transformer architecture with one
     of the base model classes of the library as encoder and another one as decoder when created with the
@@ -112,7 +63,8 @@ class EncoderDecoderModel(PreTrainedModel):
     def __init__(
         self,
         config: Optional[PretrainedConfig] = None,
-        encoder: Optional[PreTrainedModel] = None,
+        image_encoder: Optional[PreTrainedModel] = None,
+        command_encoder: Optional[PreTrainedModel] = None,
         decoder: Optional[PreTrainedModel] = None,
     ):
         if config is None and (encoder is None or decoder is None):

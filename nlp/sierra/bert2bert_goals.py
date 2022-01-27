@@ -36,14 +36,15 @@ decoder_tokenizer_path = os.path.join(brain_path, tokenizer_name)
 encoder_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 
 # Load decoder operating on the Sierra PDDL language.
-decoder_tokenizer = PreTrainedTokenizerFast(tokenizer_file=decoder_tokenizer_path)
-decoder_tokenizer.add_special_tokens({'unk_token': '[UNK]'})
-decoder_tokenizer.add_special_tokens({'sep_token': '[SEP]'})
-decoder_tokenizer.add_special_tokens({'pad_token': '[PAD]'})
-decoder_tokenizer.add_special_tokens({'cls_token': '[CLS]'})
-decoder_tokenizer.add_special_tokens({'mask_token': '[MASK]'})
-decoder_tokenizer.add_special_tokens({'bos_token': '[BOS]'})
-decoder_tokenizer.add_special_tokens({'eos_token': '[EOS]'})
+decoder_tokenizer = PreTrainedTokenizerFast(
+    tokenizer_file=decoder_tokenizer_path,
+    unk_token = '[UNK]',
+    sep_token = '[SEP]',
+    pad_token = '[PAD]',
+    cls_token = '[CLS]]',
+    mask_token = '[MASK]',
+)
+decoder_tokenizer.add_special_tokens({'bos_token': '[BOS]','eos_token': '[EOS]'})
 #print(f"\Decoder tokenizer vocabulary ({len(decoder_tokenizer.get_vocab())}):\n" + "-"*50)
 #for k, v in decoder_tokenizer.get_vocab().items():
 #    print(k, ": ", v)

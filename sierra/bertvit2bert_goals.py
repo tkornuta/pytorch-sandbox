@@ -7,17 +7,17 @@
 
 import os
 import csv
-import h5py
 from tqdm import tqdm
 
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 
 from transformers import  BertGenerationEncoder, BertGenerationDecoder
 from transformers import BertTokenizer, PreTrainedTokenizerFast
 from transformers import BertConfig
+from transformers import ViTModel  # ViTForImageClassification, ViTConfig
 
-from encoder_decoder import EncoderDecoderModel
+from multimodal_encoder_decoder import MultimodalEncoderDecoderModel
 from sierra_dataset import SierraDataset
 
 # TOKENIZER & PROCESSING
@@ -55,9 +55,13 @@ decoder_tokenizer.add_special_tokens({'bos_token': '[BOS]','eos_token': '[EOS]'}
 sierra_ds = SierraDataset(brain_path=brain_path, goals_sep=goals_sep)
 sierra_dl = DataLoader(sierra_ds, batch_size=256, shuffle=True, num_workers=2)
 
+# Create ViT encoder .
+image_encoder = ViTModel.from_pretrained('google/vit-base-patch16-224-in21k')
+#torch.nn.Linear(self.vit.config.hidden_size, cfg.n_classes)
+
 # leverage checkpoints for Bert2Bert model...
 # use BERT's cls token as BOS token and sep token as EOS token
-encoder = BertGenerationEncoder.from_pretrained("bert-base-uncased",
+command_encoder = BertGenerationEncoder.from_pretrained("bert-base-uncased",
     # Set required tokens.
     #bos_token_id=encoder_tokenizer.vocab["[CLS]"],
     #eos_token_id=encoder_tokenizer.vocab["[SEP]"],
@@ -81,7 +85,7 @@ decoder_config = BertConfig(
 decoder = BertGenerationDecoder(config=decoder_config)
 
 # Setup enc-decoder mode.
-bert2bert = EncoderDecoderModel(encoder=encoder, decoder=decoder)
+bert2bert = MultimodalEncoderDecoderModel(image_encoder=image_encoder, command_encoder=command_encoder, decoder=decoder)
 bert2bert.config.decoder_start_token_id=decoder_tokenizer.vocab["[CLS]"]
 bert2bert.config.pad_token_id=decoder_tokenizer.vocab["[PAD]"]
 

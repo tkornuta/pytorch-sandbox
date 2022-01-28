@@ -2,25 +2,35 @@
 
 import os
 import csv
+import io
+from sys import breakpointhook
+import numpy as np
+from PIL import Image
+
 import h5py
 from tqdm import tqdm
 
-from torch.utils.data import Dataset
+import torch
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
 
-# Path to brain2.
-#brain_path = "/home/tkornuta/data/brain2"
 
 class SierraDataset(Dataset):
     """Dataset for Sierra, loading samples directly from h5 files."""
 
-    def __init__(self, brain_path, goals_sep=False):
+    def __init__(self, brain_path, goals_sep=False, return_rgb = False, subset = -1):
         """Initializes dataset by loading humand commands (from a csv file) and all other data (from h5 files).
         
         Args:
             goals_sep (bool, default: False): if set, uses special preprocessing by removing punctuation and additional [SEP] token after each goal.
+            return_rgb (bool, default: False): if set, loads and fetches images.
+            subset (int, default: -1): if greater than zero, limits number of loaded samples (mostly for testing purposes).
         """
         # Get path to sierra data.
         sierra_path = os.path.join(brain_path, "leonardo_sierra")
+
+        # Store flags.
+        self.return_rgb = return_rgb
 
         # Open csv file with commands created by humans.
         command_humans_dict = {}
@@ -38,6 +48,17 @@ class SierraDataset(Dataset):
         self.symbolic_goals_values = []
         self.symbolic_goals_with_negation = []
 
+        self.init_rgb_images = []
+
+        # Transforms used to reshape/normalize RGB images to format/standard used in pretrained ResNet/ViT models.
+        rgb_transforms = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Resize([224, 224]),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ]
+        )
+
         # Max lengths.
         self.max_plan_length = 0
         self.max_goals_length = 0
@@ -45,9 +66,12 @@ class SierraDataset(Dataset):
         # Get files.
         sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
         
-
         # Open files one by one.
         for i,filename in enumerate(tqdm(sierra_files)):
+            # Limit
+            if subset >0 and i >= subset:
+                break
+
             # Load the file.
             h5 = h5py.File(os.path.join(sierra_path, filename), 'r')
             
@@ -95,6 +119,20 @@ class SierraDataset(Dataset):
             self.max_plan_length = max(self.max_plan_length, len(tokenized_plan))
             self.max_goals_length = max(self.max_goals_length, len(tokenized_goals))
 
+            if self.return_rgb:
+                # Number of images.
+                #num_images = h5['q'].shape[0]
+
+                # Get RGB images.
+                rgbs = h5['rgb'][()]
+
+                # Process the init RGB image.
+                stream = io.BytesIO(rgbs[0])
+                im = Image.open(stream)
+                pil_rgb = im.convert("RGB")
+                rgb_normalized_tensor = rgb_transforms(pil_rgb)
+                
+                self.init_rgb_images.append(rgb_normalized_tensor)
 
         # Make sure all lenths are the same.
         assert len(self.command_humans) == len(self.symbolic_plans)
@@ -225,4 +263,22 @@ class SierraDataset(Dataset):
             "symbolic_goals_with_negation": self.symbolic_goals_with_negation[idx],
         }
 
+        # Add
+        if self.return_rgb:
+            sample["init_rgb"] = self.init_rgb_images[idx]
+
         return sample
+
+if __name__ == "__main__":
+    # Path to brain2.
+    brain_path = "/home/tkornuta/data/brain2"
+    # Create dataset/dataloader.
+    sierra_ds = SierraDataset(brain_path=brain_path, goals_sep=True, return_rgb=True, subset=10)
+    sierra_dl = DataLoader(sierra_ds, batch_size=4, shuffle=True, num_workers=2)
+
+    print("Loaded {} samples", len(sierra_ds))
+    # get sample.
+    batch = next(iter(sierra_dl))
+    
+    import pdb;pdb.set_trace()
+    print(batch.keys())

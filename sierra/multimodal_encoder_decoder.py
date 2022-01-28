@@ -15,6 +15,7 @@
 """ Classes to support Encoder-Decoder architectures"""
 
 import warnings
+import copy
 from typing import Optional
 
 import torch
@@ -28,6 +29,63 @@ from transformers.utils import logging
 from transformers import AutoConfig
 from transformers import AutoModel, AutoModelForCausalLM
 from transformers import EncoderDecoderConfig
+
+class MultimodalEncoderDecoderConfig(PretrainedConfig):
+
+    model_type = "multimodal-encoder-decoder"
+    is_composition = True
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        assert (
+            "encoder" in kwargs and "decoder" in kwargs
+        ), "Config has to be initialized with encoder and decoder config"
+        image_encoder_config = kwargs.pop("image_encoder")
+        image_encoder_model_type = image_encoder_config.pop("model_type")
+
+        command_encoder_config = kwargs.pop("command_encoder")
+        command_encoder_model_type = command_encoder_config.pop("model_type")
+
+        decoder_config = kwargs.pop("decoder")
+        decoder_model_type = decoder_config.pop("model_type")
+
+        self.image_encoder = AutoConfig.for_model(image_encoder_model_type, **image_encoder_config)
+        self.command_encoder = AutoConfig.for_model(command_encoder_model_type, **command_encoder_config)
+        self.decoder = AutoConfig.for_model(decoder_model_type, **decoder_config)
+        self.is_encoder_decoder = True
+
+    @classmethod
+    def from_encoder_decoder_configs(
+        cls, image_encoder_config: PretrainedConfig, command_encoder_config: PretrainedConfig,decoder_config: PretrainedConfig, **kwargs
+    ) -> PretrainedConfig:
+        r"""
+        Instantiate a [`MultimodalEncoderDecoderConfig`] (or a derived class) from a pre-trained encoder model configuration and
+        decoder model configuration.
+        Returns:
+            [`MultimodalEncoderDecoderConfig`]: An instance of a configuration object
+        """
+        logger.info("Set `config.is_decoder=True` and `config.add_cross_attention=True` for decoder_config")
+        decoder_config.is_decoder = True
+        decoder_config.add_cross_attention = True
+
+        return cls(image_encoder_config=image_encoder_config.to_dict(),
+            command_encoder_config=command_encoder_config.to_dict(),
+            decoder=decoder_config.to_dict(),
+            **kwargs)
+
+    def to_dict(self):
+        """
+        Serializes this instance to a Python dictionary. Override the default *to_dict()* from *PretrainedConfig*.
+        Returns:
+            `Dict[str, any]`: Dictionary of all the attributes that make up this configuration instance,
+        """
+        output = copy.deepcopy(self.__dict__)
+        output["image_encoder"] = self.image_encoder.to_dict()
+        output["command_encoder"] = self.command_encoder.to_dict()
+        output["decoder"] = self.decoder.to_dict()
+        output["model_type"] = self.__class__.model_type
+        return output
+
 
 
 logger = logging.get_logger(__name__)
@@ -57,8 +115,8 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
     :meth*~transformers.AutoModel.from_pretrained* class method for the encoder and
     :meth*~transformers.AutoModelForCausalLM.from_pretrained* class method for the decoder.
     """
-    config_class = EncoderDecoderConfig
-    base_model_prefix = "encoder_decoder"
+    config_class = MultimodalEncoderDecoderConfig
+    base_model_prefix = "multimodal_encoder_decoder"
 
     def __init__(
         self,
@@ -67,85 +125,101 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         command_encoder: Optional[PreTrainedModel] = None,
         decoder: Optional[PreTrainedModel] = None,
     ):
-        if config is None and (encoder is None or decoder is None):
-            raise ValueError("Either a configuration or an encoder and a decoder has to be provided.")
+        if config is None and (image_encoder is None or command_encoder is None or decoder is None):
+            raise ValueError("Either a configuration or both encoders and a decoder have to be provided.")
         if config is None:
-            config = EncoderDecoderConfig.from_encoder_decoder_configs(encoder.config, decoder.config)
+            config = MultimodalEncoderDecoderConfig.from_encoder_decoder_configs(image_encoder.config, command_encoder.config, decoder.config)
         else:
             if not isinstance(config, self.config_class):
                 raise ValueError(f"Config: {config} has to be of type {self.config_class}")
 
         if config.decoder.cross_attention_hidden_size is not None:
-            if config.decoder.cross_attention_hidden_size != config.encoder.hidden_size:
+            if config.decoder.cross_attention_hidden_size != (config.image_encoder.hidden_size + config.command_encoder.hidden_size):
                 raise ValueError(
                     "If `cross_attention_hidden_size` is specified in the decoder's configuration, "
-                    "it has to be equal to the encoder's `hidden_size`. "
+                    "it has to be equal to the sum of encoder's `hidden_size`s. "
                     f"Got {config.decoder.cross_attention_hidden_size} for `config.decoder.cross_attention_hidden_size` "
-                    f"and {config.encoder.hidden_size} for `config.encoder.hidden_size`."
+                    f"and {config.image_encoder.hidden_size} for `config.image_encoder.hidden_size`"
+                    f"and {config.command_encoder.hidden_size} for `config.command_encoder.hidden_size`."
                 )
 
         # initialize with config
         super().__init__(config)
 
-        if encoder is None:
+        if image_encoder is None:
             from transformers import AutoModel
 
-            encoder = AutoModel.from_config(config.encoder)
+            image_encoder = AutoModel.from_config(config.image_encoder)
+
+        if command_encoder is None:
+            from transformers import AutoModel
+
+            command_encoder = AutoModel.from_config(config.command_encoder)
 
         if decoder is None:
             from transformers import AutoModelForCausalLM
 
             decoder = AutoModelForCausalLM.from_config(config.decoder)
 
-        self.encoder = encoder
+        self.image_encoder = image_encoder
+        self.command_encoder = command_encoder
         self.decoder = decoder
 
-        if self.encoder.config.to_dict() != self.config.encoder.to_dict():
-            logger.warning(
-                f"Config of the encoder: {self.encoder.__class__} is overwritten by shared encoder config: {self.config.encoder}"
-            )
-        if self.decoder.config.to_dict() != self.config.decoder.to_dict():
-            logger.warning(
-                f"Config of the decoder: {self.decoder.__class__} is overwritten by shared decoder config: {self.config.decoder}"
-            )
+        #if self.encoder.config.to_dict() != self.config.encoder.to_dict():
+        #    logger.warning(
+        #        f"Config of the encoder: {self.encoder.__class__} is overwritten by shared encoder config: {self.config.encoder}"
+        #    )
+        #if self.decoder.config.to_dict() != self.config.decoder.to_dict():
+        #    logger.warning(
+        #        f"Config of the decoder: {self.decoder.__class__} is overwritten by shared decoder config: {self.config.decoder}"
+        #    )
 
         # make sure that the individual model's config refers to the shared config
         # so that the updates to the config will be synced
-        self.encoder.config = self.config.encoder
+        self.image_encoder.config = self.image_config.encoder
+        self.command_encoder.config = self.command_encoder.encoder
         self.decoder.config = self.config.decoder
 
-        # encoder outputs might need to be projected to different dimension for decoder
-        if (
-            self.encoder.config.hidden_size != self.decoder.config.hidden_size
-            and self.decoder.config.cross_attention_hidden_size is None
-        ):
-            self.enc_to_dec_proj = nn.Linear(self.encoder.config.hidden_size, self.decoder.config.hidden_size)
+        # encoders outputs might need to be projected to different dimension for decoder cross-attention.
+        # TODO: probably this is wrong! both encoders should have the same hidden size!
+        #if (
+        #    self.decoder.config.hidden_size != (self.image_encoder.config.hidden_size + self.command_encoder.config.hidden_size)
+        #    and self.decoder.config.cross_attention_hidden_size is None
+        #):
+        #    self.enc_to_dec_proj = nn.Linear(self.image_encoder.config.hidden_size + self.command_encoder.config.hidden_size, self.decoder.config.hidden_size)
 
-        if self.encoder.get_output_embeddings() is not None:
-            raise ValueError(
-                f"The encoder {self.encoder} should not have a LM Head. Please use a model without LM Head"
-            )
+        #if self.encoder.get_output_embeddings() is not None:
+        #    raise ValueError(
+        #        f"The encoder {self.encoder} should not have a LM Head. Please use a model without LM Head"
+        #    )
 
         # tie encoder, decoder weights if config set accordingly
-        self.tie_weights()
+        #self.tie_weights()
 
-    def tie_weights(self):
-        # tie encoder & decoder if needed
-        if self.config.tie_encoder_decoder:
-            # tie encoder and decoder base model
-            decoder_base_model_prefix = self.decoder.base_model_prefix
-            self._tie_encoder_decoder_weights(
-                self.encoder, self.decoder._modules[decoder_base_model_prefix], self.decoder.base_model_prefix
-            )
+    #def tie_weights(self):
+    #    # tie encoder & decoder if needed
+    #    if self.config.tie_encoder_decoder:
+    #        # tie encoder and decoder base model
+    #        decoder_base_model_prefix = self.decoder.base_model_prefix
+    #        self._tie_encoder_decoder_weights(
+    #            self.encoder, self.decoder._modules[decoder_base_model_prefix], self.decoder.base_model_prefix
+    #        )
 
-    def get_encoder(self):
-        return self.encoder
+    def get_image_encoder(self):
+        return self.image_encoder
+
+    def get_command_encoder(self):
+        return self.command_encoder
 
     def get_decoder(self):
         return self.decoder
 
-    def get_input_embeddings(self):
-        return self.encoder.get_input_embeddings()
+    def get_input_image_embeddings(self):
+        # TODO: check: does it makes even sense?
+        return self.image_encoder.get_input_embeddings()
+
+    def get_input_command_embeddings(self):
+        return self.command_encoder.get_input_embeddings()
 
     def get_output_embeddings(self):
         return self.decoder.get_output_embeddings()
@@ -153,175 +227,14 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
     def set_output_embeddings(self, new_embeddings):
         return self.decoder.set_output_embeddings(new_embeddings)
 
-    @classmethod
-    def from_pretrained(cls, *args, **kwargs):
-        # At the moment fast initialization is not supported for composite models
-        if kwargs.get("_fast_init", False):
-            logger.warning(
-                "Fast initialization is currently not supported for EncoderDecoderModel. "
-                "Falling back to slow initialization..."
-            )
-        kwargs["_fast_init"] = False
-        return super().from_pretrained(*args, **kwargs)
-
-    @classmethod
-    def from_encoder_decoder_pretrained(
-        cls,
-        encoder_pretrained_model_name_or_path: str = None,
-        decoder_pretrained_model_name_or_path: str = None,
-        *model_args,
-        **kwargs
-    ) -> PreTrainedModel:
-        r"""
-        Instantiate an encoder and a decoder from one or two base classes of the library from pretrained model
-        checkpoints.
-
-
-        The model is set in evaluation mode by default using `model.eval()` (Dropout modules are deactivated). To train
-        the model, you need to first set it back in training mode with `model.train()`.
-
-        Params:
-            encoder_pretrained_model_name_or_path (`str`, *optional*):
-                Information necessary to initiate the encoder. Can be either:
-
-                    - A string, the *model id* of a pretrained model hosted inside a model repo on huggingface.co.
-                      Valid model ids can be located at the root-level, like `bert-base-uncased`, or namespaced under a
-                      user or organization name, like `dbmdz/bert-base-german-cased`.
-                    - A path to a *directory* containing model weights saved using
-                      [`~PreTrainedModel.save_pretrained`], e.g., `./my_model_directory/`.
-                    - A path or url to a *tensorflow index checkpoint file* (e.g, `./tf_model/model.ckpt.index`). In
-                      this case, `from_tf` should be set to `True` and a configuration object should be provided as
-                      `config` argument. This loading path is slower than converting the TensorFlow checkpoint in a
-                      PyTorch model using the provided conversion scripts and loading the PyTorch model afterwards.
-
-            decoder_pretrained_model_name_or_path (`str`, *optional*, defaults to `None`):
-                Information necessary to initiate the decoder. Can be either:
-
-                    - A string, the *model id* of a pretrained model hosted inside a model repo on huggingface.co.
-                      Valid model ids can be located at the root-level, like `bert-base-uncased`, or namespaced under a
-                      user or organization name, like `dbmdz/bert-base-german-cased`.
-                    - A path to a *directory* containing model weights saved using
-                      [`~PreTrainedModel.save_pretrained`], e.g., `./my_model_directory/`.
-                    - A path or url to a *tensorflow index checkpoint file* (e.g, `./tf_model/model.ckpt.index`). In
-                      this case, `from_tf` should be set to `True` and a configuration object should be provided as
-                      `config` argument. This loading path is slower than converting the TensorFlow checkpoint in a
-                      PyTorch model using the provided conversion scripts and loading the PyTorch model afterwards.
-
-            model_args (remaining positional arguments, *optional*):
-                All remaining positional arguments will be passed to the underlying model's `__init__` method.
-
-            kwargs (remaining dictionary of keyword arguments, *optional*):
-                Can be used to update the configuration object (after it being loaded) and initiate the model (e.g.,
-                `output_attentions=True`).
-
-                - To update the encoder configuration, use the prefix *encoder_* for each configuration parameter.
-                - To update the decoder configuration, use the prefix *decoder_* for each configuration parameter.
-                - To update the parent model configuration, do not use a prefix for each configuration parameter.
-
-                Behaves differently depending on whether a `config` is provided or automatically loaded.
-
-        Example:
-
-        ```python
-        >>> from transformers import EncoderDecoderModel
-
-        >>> # initialize a bert2bert from two pretrained BERT models. Note that the cross-attention layers will be randomly initialized
-        >>> model = EncoderDecoderModel.from_encoder_decoder_pretrained("bert-base-uncased", "bert-base-uncased")
-        >>> # saving model after fine-tuning
-        >>> model.save_pretrained("./bert2bert")
-        >>> # load fine-tuned model
-        >>> model = EncoderDecoderModel.from_pretrained("./bert2bert")
-        ```"""
-
-        kwargs_encoder = {
-            argument[len("encoder_") :]: value for argument, value in kwargs.items() if argument.startswith("encoder_")
-        }
-
-        kwargs_decoder = {
-            argument[len("decoder_") :]: value for argument, value in kwargs.items() if argument.startswith("decoder_")
-        }
-
-        # remove encoder, decoder kwargs from kwargs
-        for key in kwargs_encoder.keys():
-            del kwargs["encoder_" + key]
-        for key in kwargs_decoder.keys():
-            del kwargs["decoder_" + key]
-
-        # Load and initialize the encoder and decoder
-        # The distinction between encoder and decoder at the model level is made
-        # by the value of the flag `is_decoder` that we need to set correctly.
-        encoder = kwargs_encoder.pop("model", None)
-        if encoder is None:
-            if encoder_pretrained_model_name_or_path is None:
-                raise ValueError(
-                    "If `encoder_model` is not defined as an argument, a `encoder_pretrained_model_name_or_path` has "
-                    "to be defined."
-                )
-
-            if "config" not in kwargs_encoder:
-                encoder_config, kwargs_encoder = AutoConfig.from_pretrained(
-                    encoder_pretrained_model_name_or_path, **kwargs_encoder, return_unused_kwargs=True
-                )
-
-                if encoder_config.is_decoder is True or encoder_config.add_cross_attention is True:
-                    logger.info(
-                        f"Initializing {encoder_pretrained_model_name_or_path} as a encoder model "
-                        "from a decoder model. Cross-attention and casual mask are disabled."
-                    )
-                    encoder_config.is_decoder = False
-                    encoder_config.add_cross_attention = False
-
-                kwargs_encoder["config"] = encoder_config
-
-            encoder = AutoModel.from_pretrained(encoder_pretrained_model_name_or_path, *model_args, **kwargs_encoder)
-
-        decoder = kwargs_decoder.pop("model", None)
-        if decoder is None:
-            if decoder_pretrained_model_name_or_path is None:
-                raise ValueError(
-                    "If `decoder_model` is not defined as an argument, a `decoder_pretrained_model_name_or_path` has "
-                    "to be defined."
-                )
-
-            if "config" not in kwargs_decoder:
-                decoder_config, kwargs_decoder = AutoConfig.from_pretrained(
-                    decoder_pretrained_model_name_or_path, **kwargs_decoder, return_unused_kwargs=True
-                )
-
-                if decoder_config.is_decoder is False or decoder_config.add_cross_attention is False:
-                    logger.info(
-                        f"Initializing {decoder_pretrained_model_name_or_path} as a decoder model. "
-                        f"Cross attention layers are added to {decoder_pretrained_model_name_or_path} "
-                        f"and randomly initialized if {decoder_pretrained_model_name_or_path}'s architecture allows for "
-                        "cross attention layers."
-                    )
-                    decoder_config.is_decoder = True
-                    decoder_config.add_cross_attention = True
-
-                kwargs_decoder["config"] = decoder_config
-
-            if kwargs_decoder["config"].is_decoder is False or kwargs_decoder["config"].add_cross_attention is False:
-                logger.warning(
-                    f"Decoder model {decoder_pretrained_model_name_or_path} is not initialized as a decoder. "
-                    f"In order to initialize {decoder_pretrained_model_name_or_path} as a decoder, "
-                    "make sure that the attributes `is_decoder` and `add_cross_attention` of `decoder_config` "
-                    "passed to `.from_encoder_decoder_pretrained(...)` are set to `True` or do not pass a "
-                    "`decoder_config` to `.from_encoder_decoder_pretrained(...)`"
-                )
-
-            decoder = AutoModelForCausalLM.from_pretrained(decoder_pretrained_model_name_or_path, **kwargs_decoder)
-
-        # instantiate config with corresponding kwargs
-        config = EncoderDecoderConfig.from_encoder_decoder_configs(encoder.config, decoder.config, **kwargs)
-        return cls(encoder=encoder, decoder=decoder, config=config)
-
     def forward(
         self,
+        input_image=None,
         input_ids=None,
         attention_mask=None,
         decoder_input_ids=None,
         decoder_attention_mask=None,
-        encoder_outputs=None,
+        #encoder_outputs=None,
         past_key_values=None,
         inputs_embeds=None,
         decoder_inputs_embeds=None,
@@ -332,37 +245,7 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         return_dict=None,
         **kwargs,
     ):
-        r"""
-        Returns:
 
-        Examples:
-
-        ```python
-        >>> from transformers import EncoderDecoderModel, BertTokenizer
-        >>> import torch
-
-        >>> tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-        >>> model = EncoderDecoderModel.from_encoder_decoder_pretrained(
-        ...     "bert-base-uncased", "bert-base-uncased"
-        >>> )  # initialize Bert2Bert from pre-trained checkpoints
-
-        >>> # training
-        >>> model.config.decoder_start_token_id = tokenizer.cls_token_id
-        >>> model.config.pad_token_id = tokenizer.pad_token_id
-        >>> model.config.vocab_size = model.config.decoder.vocab_size
-
-        >>> input_ids = tokenizer("This is a really long text", return_tensors="pt").input_ids
-        >>> labels = tokenizer("This is the corresponding summary", return_tensors="pt").input_ids
-        >>> outputs = model(input_ids=input_ids, labels=input_ids)
-        >>> loss, logits = outputs.loss, outputs.logits
-
-        >>> # save and load from pretrained
-        >>> model.save_pretrained("bert2bert")
-        >>> model = EncoderDecoderModel.from_pretrained("bert2bert")
-
-        >>> # generation
-        >>> generated = model.generate(input_ids)
-        ```"""
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         kwargs_encoder = {argument: value for argument, value in kwargs.items() if not argument.startswith("decoder_")}
@@ -371,25 +254,31 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
             argument[len("decoder_") :]: value for argument, value in kwargs.items() if argument.startswith("decoder_")
         }
 
-        if encoder_outputs is None:
-            encoder_outputs = self.encoder(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                inputs_embeds=inputs_embeds,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-                return_dict=return_dict,
-                **kwargs_encoder,
-            )
+        # Get image embeddings.
+        image_encoder_outputs = self.vit(pixel_values=input_image)
 
-        encoder_hidden_states = encoder_outputs[0]
+        #if encoder_outputs is None:
 
+        command_encoder_outputs = self.command_encoder(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            inputs_embeds=inputs_embeds,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+            **kwargs_encoder,
+        )
+
+        # Concatenate outputs of both encoders.
+        encoder_hidden_states = torch.cat((image_encoder_outputs[0], command_encoder_outputs[0]), 0)
+        
         # optionally project encoder_hidden_states
-        if (
-            self.encoder.config.hidden_size != self.decoder.config.hidden_size
-            and self.decoder.config.cross_attention_hidden_size is None
-        ):
-            encoder_hidden_states = self.enc_to_dec_proj(encoder_hidden_states)
+        # TODO: probably this is wrong! both encoders should have the same hidden size!
+        #if (
+        #    self.decoder.config.hidden_size != (self.image_encoder.config.hidden_size + self.command_encoder.config.hidden_size)
+        #    and self.decoder.config.cross_attention_hidden_size is None
+        #):
+        #    encoder_hidden_states = self.enc_to_dec_proj(encoder_hidden_states)
 
         if (labels is not None) and (decoder_input_ids is None and decoder_inputs_embeds is None):
             decoder_input_ids = shift_tokens_right(

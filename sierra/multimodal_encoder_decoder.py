@@ -38,8 +38,8 @@ class MultimodalEncoderDecoderConfig(PretrainedConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         assert (
-            "encoder" in kwargs and "decoder" in kwargs
-        ), "Config has to be initialized with encoder and decoder config"
+            "image_encoder" in kwargs and "command_encoder" in kwargs and "decoder" in kwargs
+        ), "Config has to be initialized with image encoder, command encoder and decoder configs"
         image_encoder_config = kwargs.pop("image_encoder")
         image_encoder_model_type = image_encoder_config.pop("model_type")
 
@@ -68,8 +68,8 @@ class MultimodalEncoderDecoderConfig(PretrainedConfig):
         decoder_config.is_decoder = True
         decoder_config.add_cross_attention = True
 
-        return cls(image_encoder_config=image_encoder_config.to_dict(),
-            command_encoder_config=command_encoder_config.to_dict(),
+        return cls(image_encoder=image_encoder_config.to_dict(),
+            command_encoder=command_encoder_config.to_dict(),
             decoder=decoder_config.to_dict(),
             **kwargs)
 
@@ -176,8 +176,8 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
 
         # make sure that the individual model's config refers to the shared config
         # so that the updates to the config will be synced
-        self.image_encoder.config = self.image_config.encoder
-        self.command_encoder.config = self.command_encoder.encoder
+        self.image_encoder.config = self.config.image_encoder
+        self.command_encoder.config = self.config.command_encoder
         self.decoder.config = self.config.decoder
 
         # encoders outputs might need to be projected to different dimension for decoder cross-attention.
@@ -255,10 +255,9 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         }
 
         # Get image embeddings.
-        image_encoder_outputs = self.vit(pixel_values=input_image)
+        image_encoder_outputs = self.image_encoder(pixel_values=input_image)
 
-        #if encoder_outputs is None:
-
+        # Get command embeddings.
         command_encoder_outputs = self.command_encoder(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -269,8 +268,8 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
             **kwargs_encoder,
         )
 
-        # Concatenate outputs of both encoders.
-        encoder_hidden_states = torch.cat((image_encoder_outputs[0], command_encoder_outputs[0]), 0)
+        # Concatenate outputs of both encoders along "sequence" dimension.
+        encoder_hidden_states = torch.cat((image_encoder_outputs[0], command_encoder_outputs[0]), 1)
         
         # optionally project encoder_hidden_states
         # TODO: probably this is wrong! both encoders should have the same hidden size!
@@ -284,6 +283,8 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
             decoder_input_ids = shift_tokens_right(
                 labels, self.config.pad_token_id, self.config.decoder_start_token_id
             )
+
+        #import pdb;pdb.set_trace()
 
         # Decode
         decoder_outputs = self.decoder(
@@ -303,16 +304,16 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         # Compute loss independent from decoder (as some shift the logits inside them)
         loss = None
         if labels is not None:
-            warnings.warn(DEPRECATION_WARNING, FutureWarning)
+            #warnings.warn(DEPRECATION_WARNING, FutureWarning)
             logits = decoder_outputs.logits if return_dict else decoder_outputs[0]
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(logits.reshape(-1, self.decoder.config.vocab_size), labels.view(-1))
 
         if not return_dict:
             if loss is not None:
-                return (loss,) + decoder_outputs + encoder_outputs
+                return (loss,) + decoder_outputs + command_encoder_outputs
             else:
-                return decoder_outputs + encoder_outputs
+                return decoder_outputs + command_encoder_outputs
 
         return Seq2SeqLMOutput(
             loss=loss,
@@ -321,9 +322,10 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
             decoder_hidden_states=decoder_outputs.hidden_states,
             decoder_attentions=decoder_outputs.attentions,
             cross_attentions=decoder_outputs.cross_attentions,
-            encoder_last_hidden_state=encoder_outputs.last_hidden_state,
-            encoder_hidden_states=encoder_outputs.hidden_states,
-            encoder_attentions=encoder_outputs.attentions,
+            # TODO: Not sure about the following ones! what should be there?
+            encoder_last_hidden_state=command_encoder_outputs.last_hidden_state,
+            encoder_hidden_states=command_encoder_outputs.hidden_states,
+            encoder_attentions=command_encoder_outputs.attentions,
         )
 
     def prepare_decoder_input_ids_from_labels(self, labels: torch.Tensor):

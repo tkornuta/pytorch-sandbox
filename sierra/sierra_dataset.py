@@ -18,13 +18,13 @@ from torchvision import transforms
 class SierraDataset(Dataset):
     """Dataset for Sierra, loading samples directly from h5 files."""
 
-    def __init__(self, brain_path, goals_sep=False, return_rgb = False, subset = -1):
+    def __init__(self, brain_path, goals_sep=False, return_rgb = False, limit = -1):
         """Initializes dataset by loading humand commands (from a csv file) and all other data (from h5 files).
         
         Args:
             goals_sep (bool, default: False): if set, uses special preprocessing by removing punctuation and additional [SEP] token after each goal.
             return_rgb (bool, default: False): if set, loads and fetches images.
-            subset (int, default: -1): if greater than zero, limits number of loaded samples (mostly for testing purposes).
+            limit (int, default: -1): if greater than zero, limits the number of loaded samples (mostly for testing purposes).
         """
         # Get path to sierra data.
         sierra_path = os.path.join(brain_path, "leonardo_sierra")
@@ -69,7 +69,7 @@ class SierraDataset(Dataset):
         # Open files one by one.
         for i,filename in enumerate(tqdm(sierra_files)):
             # Limit
-            if subset >0 and i >= subset:
+            if limit >0 and i >= limit:
                 break
 
             # Load the file.
@@ -273,7 +273,7 @@ if __name__ == "__main__":
     # Path to brain2.
     brain_path = "/home/tkornuta/data/brain2"
     # Create dataset/dataloader.
-    sierra_ds = SierraDataset(brain_path=brain_path, goals_sep=True, return_rgb=True, subset=10)
+    sierra_ds = SierraDataset(brain_path=brain_path, goals_sep=True, return_rgb=True, limit=10)
     sierra_dl = DataLoader(sierra_ds, batch_size=4, shuffle=True, num_workers=2)
 
     print("Loaded {} samples", len(sierra_ds))

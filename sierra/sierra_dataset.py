@@ -255,6 +255,7 @@ class SierraDataset(Dataset):
             else:
                 print(f"Error for sample {idx} command: {command_humans}")
         sample = {
+            "idx": idx,
             "sample_names": self.sample_names[idx],
             "command_templates": self.command_templates[idx],
             "command_humans": command_humans,

@@ -411,6 +411,9 @@ class EncoderDecoderModel(PreTrainedModel):
         >>> # generation
         >>> generated = model.generate(input_ids)
         ```"""
+        print("model forward !!!")
+        import pdb;pdb.set_trace()
+
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         kwargs_encoder = {argument: value for argument, value in kwargs.items() if not argument.startswith("decoder_")}
@@ -444,6 +447,8 @@ class EncoderDecoderModel(PreTrainedModel):
                 labels, self.config.pad_token_id, self.config.decoder_start_token_id
             )
 
+        print("decoder decode !!!")
+        import pdb;pdb.set_trace()
         # Decode
         decoder_outputs = self.decoder(
             input_ids=decoder_input_ids,
@@ -491,6 +496,9 @@ class EncoderDecoderModel(PreTrainedModel):
     def prepare_inputs_for_generation(
         self, input_ids, past=None, attention_mask=None, use_cache=None, encoder_outputs=None, **kwargs
     ):
+        print("prepare_inputs_for_generation !!!")
+        import pdb;pdb.set_trace()
+
         decoder_inputs = self.decoder.prepare_inputs_for_generation(input_ids, past=past)
         decoder_attention_mask = decoder_inputs["attention_mask"] if "attention_mask" in decoder_inputs else None
         input_dict = {

@@ -17,6 +17,7 @@
 import warnings
 import copy
 from typing import Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 import torch
 from torch import nn
@@ -24,7 +25,7 @@ from torch.nn import CrossEntropyLoss
 
 from transformers.configuration_utils import PretrainedConfig
 from transformers.modeling_outputs import Seq2SeqLMOutput
-from transformers.modeling_utils import PreTrainedModel
+from transformers.modeling_utils import PreTrainedModel, ModelOutput
 from transformers.utils import logging
 from transformers import AutoConfig
 from transformers import AutoModel, AutoModelForCausalLM
@@ -133,6 +134,8 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
             if not isinstance(config, self.config_class):
                 raise ValueError(f"Config: {config} has to be of type {self.config_class}")
 
+        # TODO: probably this is wrong! both encoders should have the same hidden size!
+        #import pdb;pdb.set_trace()
         if config.decoder.cross_attention_hidden_size is not None:
             if config.decoder.cross_attention_hidden_size != (config.image_encoder.hidden_size + config.command_encoder.hidden_size):
                 raise ValueError(
@@ -234,7 +237,7 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         attention_mask=None,
         decoder_input_ids=None,
         decoder_attention_mask=None,
-        #encoder_outputs=None,
+        encoder_outputs=None,
         past_key_values=None,
         inputs_embeds=None,
         decoder_inputs_embeds=None,
@@ -245,6 +248,8 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         return_dict=None,
         **kwargs,
     ):
+        print("model forward !!!")
+        import pdb;pdb.set_trace()
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
@@ -254,23 +259,27 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
             argument[len("decoder_") :]: value for argument, value in kwargs.items() if argument.startswith("decoder_")
         }
 
-        # Get image embeddings.
-        image_encoder_outputs = self.image_encoder(pixel_values=input_image)
+        if encoder_outputs is None:
+            # Get image embeddings.
+            image_encoder_outputs = self.image_encoder(pixel_values=input_image)
 
-        # Get command embeddings.
-        command_encoder_outputs = self.command_encoder(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            inputs_embeds=inputs_embeds,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-            **kwargs_encoder,
-        )
+            # Get command embeddings.
+            command_encoder_outputs = self.command_encoder(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                inputs_embeds=inputs_embeds,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+                **kwargs_encoder,
+            )
 
-        # Concatenate outputs of both encoders along "sequence" dimension.
-        encoder_hidden_states = torch.cat((image_encoder_outputs[0], command_encoder_outputs[0]), 1)
+            # Concatenate outputs of both encoders along "sequence" dimension.
+            encoder_outputs = torch.cat((image_encoder_outputs[0], command_encoder_outputs[0]), 1)
         
+        # Back to regular track ;)
+        encoder_hidden_states = encoder_outputs
+
         # optionally project encoder_hidden_states
         # TODO: probably this is wrong! both encoders should have the same hidden size!
         #if (
@@ -287,6 +296,9 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         #import pdb;pdb.set_trace()
 
         # Decode
+        print("decoder decode !!!")
+        import pdb;pdb.set_trace()
+
         decoder_outputs = self.decoder(
             input_ids=decoder_input_ids,
             attention_mask=decoder_attention_mask,
@@ -309,19 +321,20 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(logits.reshape(-1, self.decoder.config.vocab_size), labels.view(-1))
 
+        import pdb;pdb.set_trace()
         if not return_dict:
             if loss is not None:
-                return (loss,) + decoder_outputs + command_encoder_outputs
+                return (loss,) + decoder_outputs + encoder_outputs
             else:
-                return decoder_outputs + command_encoder_outputs
+                return decoder_outputs + encoder_outputs
 
         return Seq2SeqLMOutput(
             loss=loss,
             logits=decoder_outputs.logits,
-            past_key_values=decoder_outputs.past_key_values,
-            decoder_hidden_states=decoder_outputs.hidden_states,
-            decoder_attentions=decoder_outputs.attentions,
-            cross_attentions=decoder_outputs.cross_attentions,
+            past_key_values=decoder_outputs.past_key_values, # tuple
+            decoder_hidden_states=decoder_outputs.hidden_states, # None!
+            decoder_attentions=decoder_outputs.attentions, # None!
+            cross_attentions=decoder_outputs.cross_attentions, # None!
             # TODO: Not sure about the following ones! what should be there?
             encoder_last_hidden_state=command_encoder_outputs.last_hidden_state,
             encoder_hidden_states=command_encoder_outputs.hidden_states,
@@ -334,6 +347,8 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
     def prepare_inputs_for_generation(
         self, input_ids, past=None, attention_mask=None, use_cache=None, encoder_outputs=None, **kwargs
     ):
+        import pdb;pdb.set_trace()
+        print("prepare_inputs_for_generation !!!")
         decoder_inputs = self.decoder.prepare_inputs_for_generation(input_ids, past=past)
         decoder_attention_mask = decoder_inputs["attention_mask"] if "attention_mask" in decoder_inputs else None
         input_dict = {
@@ -355,3 +370,64 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
     def _reorder_cache(self, past, beam_idx):
         # apply decoder cache reordering here
         return self.decoder._reorder_cache(past, beam_idx)
+
+    def _prepare_decoder_input_ids_for_generation(
+        self,
+        batch_size: int,
+        decoder_start_token_id: int = None,
+        bos_token_id: int = None,
+        model_kwargs: Optional[Dict[str, torch.Tensor]] = None,
+    ) -> torch.LongTensor:
+        import pdb;pdb.set_trace()
+        print("_prepare_decoder_input_ids_for_generation !!!")
+
+        if model_kwargs is not None and "decoder_input_ids" in model_kwargs:
+            return model_kwargs.pop("decoder_input_ids")
+        else:
+            decoder_start_token_id = self._get_decoder_start_token_id(decoder_start_token_id, bos_token_id)
+            return torch.ones((batch_size, 1), dtype=torch.long, device=self.device) * decoder_start_token_id
+
+
+    def _prepare_encoder_decoder_kwargs_for_generation(
+        self, inputs_tensor: torch.Tensor, model_kwargs, model_input_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        import pdb;pdb.set_trace()
+        print("_prepare_encoder_decoder_kwargs_for_generation !!!")
+        # 1. get encoder
+        #encoder = self.get_encoder() - got two encoders.
+        #input_image = model_kwargs.pop("input_image")
+        input_image = model_kwargs["input_image"]
+
+        # 2. prepare encoder args and encoder kwargs from model kwargs
+        irrelevant_prefix = ["decoder_", "cross_attn", "use_cache", "input_image"]
+        encoder_kwargs = {
+            argument: value
+            for argument, value in model_kwargs.items()
+            if not any(argument.startswith(p) for p in irrelevant_prefix)
+        }
+
+        # 3. make sure that encoder returns `ModelOutput`
+        model_input_name = model_input_name if model_input_name is not None else self.main_input_name
+        encoder_kwargs["return_dict"] = True
+        encoder_kwargs[model_input_name] = inputs_tensor
+
+        # Prepare "encoders output".
+
+        # Get image embeddings.
+        image_encoder_outputs = self.image_encoder(pixel_values=input_image)
+        
+
+        # Get command embeddings.
+        command_encoder_outputs = self.command_encoder(
+            **encoder_kwargs
+            )
+
+        # Concatenate outputs of both encoders along "sequence" dimension.
+        encoder_hidden_states = torch.cat((image_encoder_outputs[0], command_encoder_outputs[0]), 1)
+
+        # To model output?
+        # ModelOutput = ... ?
+
+        model_kwargs["encoder_outputs"]: ModelOutput = encoder_hidden_states
+
+        return model_kwargs

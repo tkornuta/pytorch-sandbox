@@ -22,6 +22,7 @@ from sierra_dataset import SierraDataset
 
 # TOKENIZER & PROCESSING
 tokenizer_name = "leonardo_sierra.goals_decoder_tokenizer_sep.json"
+limit=100
 
 # Paths.
 brain_path = "/home/tkornuta/data/brain2"
@@ -47,7 +48,7 @@ decoder_tokenizer.add_special_tokens({'bos_token': '[BOS]','eos_token': '[EOS]'}
 # decoder_tokenizer.model_max_length=512 ??
 
 # Create dataset/dataloader.
-sierra_ds = SierraDataset(brain_path=brain_path, goals_sep=True, return_rgb=True, limit=100)
+sierra_ds = SierraDataset(brain_path=brain_path, goals_sep=True, return_rgb=True, limit=limit)
 sierra_dl = DataLoader(sierra_ds, batch_size=64, shuffle=True, num_workers=2)
 
 # Create ViT encoder .
@@ -86,7 +87,53 @@ model.config.pad_token_id=decoder_tokenizer.vocab["[PAD]"]
 
 # Elementary Training.
 optimizer = torch.optim.Adam(model.parameters(), lr=0.000001)
-model.cuda()
+#model.cuda()
+
+# Sample one item from the dataset.
+print("Loaded {} samples", len(sierra_ds))
+# Get sample.
+sample = next(iter(DataLoader(sierra_ds, batch_size=1, shuffle=True)))
+#sample = sierra_ds[14]
+
+# Sample.
+print(f"Sample {sample['idx']}: {sample['sample_names']}\n" + "-"*100)
+print("Command: ", sample["command_humans"])
+print("Target: ", sample["symbolic_goals_with_negation"])
+print("-"*100)
+
+input_image = sample["init_rgb"]
+# Tokenize inputs.
+command_tokenized = encoder_tokenizer(sample["command_humans"], add_special_tokens=True, return_tensors="pt")
+print("Command tokenized: ", command_tokenized)
+print(f"\nCommand: `{encoder_tokenizer.decode(command_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
+
+# Tokenize labels - do not add special tokens as they are already due to the preprocessing.
+target_tokenized = decoder_tokenizer(sample["symbolic_goals_with_negation"], add_special_tokens=False, return_tensors="pt") 
+print("Target tokenized: ", target_tokenized)
+print(f"\nTarget: `{decoder_tokenizer.decode(target_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
+
+import pdb;pdb.set_trace()
+
+# Get image embeddings.
+#image_encoder_outputs = image_encoder(pixel_values=input_image)
+
+# Get command embeddings.
+#command_encoder_outputs = command_encoder(
+#    input_ids=command_tokenized.input_ids,
+#    attention_mask=command_tokenized.attention_mask,
+#)
+
+# Concatenate outputs of both encoders along "sequence" dimension.
+#encoder_hidden_states = torch.cat((image_encoder_outputs[0], command_encoder_outputs[0]), 1)
+
+output = model(input_image=input_image, input_ids=command_tokenized.input_ids, labels=target_tokenized.input_ids, return_dict=True)
+
+# Generate output:
+greedy_output = model.generate(input_image=input_image, input_ids=command_tokenized.input_ids, max_length=(sierra_ds.max_goals_length + 2))
+print(f"Output ({greedy_output.shape}): {greedy_output}")
+print(f"\nModel prediction: `{decoder_tokenizer.decode(greedy_output[0], skip_special_tokens=False)}`\n")
+
+exit(1)
 
 for epoch in range(30):
     print("*"*50, "Epoch", epoch, "*"*50)
@@ -106,7 +153,7 @@ for epoch in range(30):
         batch["init_rgb"] = batch["init_rgb"].cuda()
 
         # Get outputs/loss.
-        output = model(input_image=batch["init_rgb"], input_ids=commans.input_ids, labels=labels.input_ids, return_dict=True)
+        output = model(pixel_values=batch["init_rgb"], input_ids=commans.input_ids, labels=labels.input_ids, return_dict=True)
         print("loss = ", output.loss)
 
         output.loss.backward()
@@ -115,21 +162,10 @@ for epoch in range(30):
         optimizer.step()
 
     print("*"*50, "Sanity check at the end of Epoch", epoch, "*"*50)
-    # Sample.
-    command = "Separate the given stack to form blue, red and yellow blocks stack."
-    goals = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
-    values = [False, True, True, False]
-    goals = SierraDataset.process_goals_sep(goals, values, return_string=True)
-    print("Command: ", command)
-    print("Target: ", goals)
 
-    # Tokenize inputs and labels.
-    input_command = encoder_tokenizer(command, add_special_tokens=True, return_tensors="pt")
-    print("Inputs tokenized: ", input_command)
+    # TODO: generation!
+    continue
 
-    goals_tokenized = decoder_tokenizer(goals, add_special_tokens=True, return_tensors="pt")
-    print("Target tokenized: ", goals_tokenized)
-    print(f"\nTarget: `{decoder_tokenizer.decode(goals_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
     # Move inputs to GPU.
     #for key,item in input_command.items():

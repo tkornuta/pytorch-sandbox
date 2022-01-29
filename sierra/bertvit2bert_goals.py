@@ -22,7 +22,7 @@ from sierra_dataset import SierraDataset
 
 # TOKENIZER & PROCESSING
 tokenizer_name = "leonardo_sierra.goals_decoder_tokenizer_sep.json"
-limit=100
+limit=-1
 
 # Paths.
 brain_path = "/home/tkornuta/data/brain2"
@@ -85,9 +85,8 @@ model = MultimodalEncoderDecoderModel(image_encoder=image_encoder, command_encod
 model.config.decoder_start_token_id=decoder_tokenizer.vocab["[CLS]"]
 model.config.pad_token_id=decoder_tokenizer.vocab["[PAD]"]
 
-# Elementary Training.
-optimizer = torch.optim.Adam(model.parameters(), lr=0.000001)
-#model.cuda()
+# Move model to GPU.
+model.cuda()
 
 # Sample one item from the dataset.
 print("Loaded {} samples", len(sierra_ds))
@@ -112,40 +111,28 @@ target_tokenized = decoder_tokenizer(sample["symbolic_goals_with_negation"], add
 print("Target tokenized: ", target_tokenized)
 print(f"\nTarget: `{decoder_tokenizer.decode(target_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
-import pdb;pdb.set_trace()
+# Move data to GPU.
+input_image = input_image.cuda()
+for key,item in command_tokenized.items():
+    if type(item).__name__ == "Tensor":
+        command_tokenized[key] = item.cuda()
+for key,item in target_tokenized.items():
+    if type(item).__name__ == "Tensor":
+        target_tokenized[key] = item.cuda()
 
-# Get image embeddings.
-#image_encoder_outputs = image_encoder(pixel_values=input_image)
-
-# Get command embeddings.
-#command_encoder_outputs = command_encoder(
-#    input_ids=command_tokenized.input_ids,
-#    attention_mask=command_tokenized.attention_mask,
-#)
-
-# Concatenate outputs of both encoders along "sequence" dimension.
-#encoder_hidden_states = torch.cat((image_encoder_outputs[0], command_encoder_outputs[0]), 1)
-
-output = model(input_image=input_image, input_ids=command_tokenized.input_ids, labels=target_tokenized.input_ids, return_dict=True)
-
-# Generate output:
-greedy_output = model.generate(input_image=input_image, input_ids=command_tokenized.input_ids, max_length=(sierra_ds.max_goals_length + 2))
-print(f"Output ({greedy_output.shape}): {greedy_output}")
-print(f"\nModel prediction: `{decoder_tokenizer.decode(greedy_output[0], skip_special_tokens=False)}`\n")
-
-exit(1)
-
+# Elementary training.
+optimizer = torch.optim.Adam(model.parameters(), lr=0.000001)
 for epoch in range(30):
     print("*"*50, "Epoch", epoch, "*"*50)
     for batch in tqdm(sierra_dl):
         # tokenize commands and goals.
-        commans = encoder_tokenizer(batch["command_humans"], add_special_tokens=True, return_tensors="pt", padding=True, truncation=True)
-        labels = decoder_tokenizer(batch["symbolic_goals_with_negation"], return_tensors="pt", padding=True, truncation=True, add_special_tokens=True)
+        commands = encoder_tokenizer(batch["command_humans"], add_special_tokens=True, return_tensors="pt", padding=True, truncation=True)
+        labels = decoder_tokenizer(batch["symbolic_goals_with_negation"], add_special_tokens=False, return_tensors="pt", padding=True, truncation=True, )
         
         # Move data to GPU.
-        for key,item in commans.items():
+        for key,item in commands.items():
             if type(item).__name__ == "Tensor":
-                commans[key] = item.cuda()
+                commands[key] = item.cuda()
         for key, item in labels.items():
             if type(item).__name__ == "Tensor":
                 labels[key] = item.cuda()
@@ -153,7 +140,7 @@ for epoch in range(30):
         batch["init_rgb"] = batch["init_rgb"].cuda()
 
         # Get outputs/loss.
-        output = model(pixel_values=batch["init_rgb"], input_ids=commans.input_ids, labels=labels.input_ids, return_dict=True)
+        output = model(input_image=batch["init_rgb"], input_ids=commands.input_ids, labels=labels.input_ids, return_dict=True)
         print("loss = ", output.loss)
 
         output.loss.backward()
@@ -162,18 +149,14 @@ for epoch in range(30):
         optimizer.step()
 
     print("*"*50, "Sanity check at the end of Epoch", epoch, "*"*50)
+    print("Command tokenized: ", command_tokenized)
+    print(f"\nCommand: `{encoder_tokenizer.decode(command_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
-    # TODO: generation!
-    continue
-
-
-    # Move inputs to GPU.
-    #for key,item in input_command.items():
-    #    if type(item).__name__ == "Tensor":
-    #        input_command[key] = item.cuda()
+    print("Target tokenized: ", target_tokenized)
+    print(f"\nTarget: `{decoder_tokenizer.decode(target_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
     # Generate output:
-    #greedy_output = model.generate(input_command.input_ids, max_length=(sierra_ds.max_goals_length + 2))
-    #print(f"Output ({greedy_output.shape}): {greedy_output}")
-    #print(f"\nModel prediction: `{decoder_tokenizer.decode(greedy_output[0], skip_special_tokens=False)}`\n")
+    greedy_output = model.generate(input_image=input_image, input_ids=command_tokenized.input_ids, max_length=(sierra_ds.max_goals_length + 2))
+    print(f"Output ({greedy_output.shape}): {greedy_output}")
+    print(f"\nModel prediction: `{decoder_tokenizer.decode(greedy_output[0], skip_special_tokens=False)}`\n")
 

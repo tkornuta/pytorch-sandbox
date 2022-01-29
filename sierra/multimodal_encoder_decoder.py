@@ -134,10 +134,9 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
             if not isinstance(config, self.config_class):
                 raise ValueError(f"Config: {config} has to be of type {self.config_class}")
 
-        # TODO: probably this is wrong! both encoders should have the same hidden size!
-        #import pdb;pdb.set_trace()
         if config.decoder.cross_attention_hidden_size is not None:
-            if config.decoder.cross_attention_hidden_size != (config.image_encoder.hidden_size + config.command_encoder.hidden_size):
+            if config.decoder.cross_attention_hidden_size != config.image_encoder.hidden_size or \
+                config.decoder.cross_attention_hidden_size !=  config.command_encoder.hidden_size:
                 raise ValueError(
                     "If `cross_attention_hidden_size` is specified in the decoder's configuration, "
                     "it has to be equal to the sum of encoder's `hidden_size`s. "
@@ -248,8 +247,6 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         return_dict=None,
         **kwargs,
     ):
-        print("model forward !!!")
-        import pdb;pdb.set_trace()
 
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
@@ -283,7 +280,8 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         # optionally project encoder_hidden_states
         # TODO: probably this is wrong! both encoders should have the same hidden size!
         #if (
-        #    self.decoder.config.hidden_size != (self.image_encoder.config.hidden_size + self.command_encoder.config.hidden_size)
+        #    self.decoder.config.hidden_size != self.image_encoder.config.hidden_size  or \
+        #       self.decoder.config.hidden_size != self.command_encoder.config.hidden_size)
         #    and self.decoder.config.cross_attention_hidden_size is None
         #):
         #    encoder_hidden_states = self.enc_to_dec_proj(encoder_hidden_states)
@@ -293,17 +291,16 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
                 labels, self.config.pad_token_id, self.config.decoder_start_token_id
             )
 
-        #import pdb;pdb.set_trace()
+        # Create masks for dual-encoder inputs.
+        encoder_hidden_shape = (encoder_outputs.shape[0], encoder_outputs.shape[1])
+        dual_attention_masks = torch.ones(encoder_hidden_shape, dtype=torch.long, device=self.device)
 
         # Decode
-        print("decoder decode !!!")
-        import pdb;pdb.set_trace()
-
         decoder_outputs = self.decoder(
             input_ids=decoder_input_ids,
             attention_mask=decoder_attention_mask,
             encoder_hidden_states=encoder_hidden_states,
-            encoder_attention_mask=attention_mask,
+            encoder_attention_mask=dual_attention_masks,
             inputs_embeds=decoder_inputs_embeds,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
@@ -321,7 +318,6 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(logits.reshape(-1, self.decoder.config.vocab_size), labels.view(-1))
 
-        import pdb;pdb.set_trace()
         if not return_dict:
             if loss is not None:
                 return (loss,) + decoder_outputs + encoder_outputs
@@ -336,9 +332,9 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
             decoder_attentions=decoder_outputs.attentions, # None!
             cross_attentions=decoder_outputs.cross_attentions, # None!
             # TODO: Not sure about the following ones! what should be there?
-            encoder_last_hidden_state=command_encoder_outputs.last_hidden_state,
-            encoder_hidden_states=command_encoder_outputs.hidden_states,
-            encoder_attentions=command_encoder_outputs.attentions,
+            #encoder_last_hidden_state=command_encoder_outputs.last_hidden_state,
+            #encoder_hidden_states=encoder_hidden_states.hidden_states,
+            #encoder_attentions=command_encoder_outputs.attentions,
         )
 
     def prepare_decoder_input_ids_from_labels(self, labels: torch.Tensor):
@@ -347,8 +343,7 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
     def prepare_inputs_for_generation(
         self, input_ids, past=None, attention_mask=None, use_cache=None, encoder_outputs=None, **kwargs
     ):
-        import pdb;pdb.set_trace()
-        print("prepare_inputs_for_generation !!!")
+
         decoder_inputs = self.decoder.prepare_inputs_for_generation(input_ids, past=past)
         decoder_attention_mask = decoder_inputs["attention_mask"] if "attention_mask" in decoder_inputs else None
         input_dict = {
@@ -371,28 +366,9 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         # apply decoder cache reordering here
         return self.decoder._reorder_cache(past, beam_idx)
 
-    def _prepare_decoder_input_ids_for_generation(
-        self,
-        batch_size: int,
-        decoder_start_token_id: int = None,
-        bos_token_id: int = None,
-        model_kwargs: Optional[Dict[str, torch.Tensor]] = None,
-    ) -> torch.LongTensor:
-        import pdb;pdb.set_trace()
-        print("_prepare_decoder_input_ids_for_generation !!!")
-
-        if model_kwargs is not None and "decoder_input_ids" in model_kwargs:
-            return model_kwargs.pop("decoder_input_ids")
-        else:
-            decoder_start_token_id = self._get_decoder_start_token_id(decoder_start_token_id, bos_token_id)
-            return torch.ones((batch_size, 1), dtype=torch.long, device=self.device) * decoder_start_token_id
-
-
     def _prepare_encoder_decoder_kwargs_for_generation(
         self, inputs_tensor: torch.Tensor, model_kwargs, model_input_name: Optional[str] = None
     ) -> Dict[str, Any]:
-        import pdb;pdb.set_trace()
-        print("_prepare_encoder_decoder_kwargs_for_generation !!!")
         # 1. get encoder
         #encoder = self.get_encoder() - got two encoders.
         #input_image = model_kwargs.pop("input_image")
@@ -411,12 +387,9 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         encoder_kwargs["return_dict"] = True
         encoder_kwargs[model_input_name] = inputs_tensor
 
-        # Prepare "encoders output".
-
         # Get image embeddings.
         image_encoder_outputs = self.image_encoder(pixel_values=input_image)
         
-
         # Get command embeddings.
         command_encoder_outputs = self.command_encoder(
             **encoder_kwargs
@@ -425,9 +398,7 @@ class MultimodalEncoderDecoderModel(PreTrainedModel):
         # Concatenate outputs of both encoders along "sequence" dimension.
         encoder_hidden_states = torch.cat((image_encoder_outputs[0], command_encoder_outputs[0]), 1)
 
-        # To model output?
-        # ModelOutput = ... ?
-
-        model_kwargs["encoder_outputs"]: ModelOutput = encoder_hidden_states
+        # Add encoder outputs.
+        model_kwargs["encoder_outputs"] = encoder_hidden_states
 
         return model_kwargs

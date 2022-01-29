@@ -85,33 +85,42 @@ bert2bert = EncoderDecoderModel(encoder=encoder, decoder=decoder)
 bert2bert.config.decoder_start_token_id=decoder_tokenizer.vocab["[CLS]"]
 bert2bert.config.pad_token_id=decoder_tokenizer.vocab["[PAD]"]
 
-# Elementary Training.
-optimizer = torch.optim.Adam(bert2bert.parameters(), lr=0.000001)
-#bert2bert.cuda()
+# Move model to GPU.
+bert2bert.cuda()
 
 # Sample.
-command = "Separate the given stack to form blue, red and yellow blocks stack."
-goals = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
-values = [False, True, True, False]
-goals = process_goals(goals, values, return_string=True)
-print("Command: ", command)
-print("Target: ", goals)
+sample = next(iter(DataLoader(sierra_ds, batch_size=1, shuffle=True)))
+#sample = sierra_ds[14]
 
-# Tokenize inputs and labels.
-inputs = encoder_tokenizer(command, add_special_tokens=True, return_tensors="pt")
-print("Inputs tokenized: ", inputs)
+# Sample.
+#command = "Separate the given stack to form blue, red and yellow blocks stack."
+#goals = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
 
-goals_tokenized = decoder_tokenizer(goals, add_special_tokens=add_special_tokens, return_tensors="pt")
-print("Target tokenized: ", goals_tokenized)
-print(f"\nTarget: `{decoder_tokenizer.decode(goals_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
+print(f"Sample {sample['idx']}: {sample['sample_names']}\n" + "-"*100)
+print("Command: ", sample["command_humans"])
+print("Target: ", sample["symbolic_goals_with_negation"])
+print("-"*100)
 
-# Generate output:
-greedy_output = bert2bert.generate(inputs.input_ids, max_length=(sierra_ds.max_goals_length + 2))
-#print(f"Output ({greedy_output.shape}): {greedy_output}")
-print(f"\nModel prediction: `{decoder_tokenizer.decode(greedy_output[0], skip_special_tokens=False)}`\n")
+# Tokenize inputs.
+command_tokenized = encoder_tokenizer(sample["command_humans"], add_special_tokens=True, return_tensors="pt")
+print("Command tokenized: ", command_tokenized)
+print(f"\nCommand: `{encoder_tokenizer.decode(command_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
-exit(1)
+# Tokenize labels - do not add special tokens as they are already due to the preprocessing.
+target_tokenized = decoder_tokenizer(sample["symbolic_goals_with_negation"], add_special_tokens=False, return_tensors="pt") 
+print("Target tokenized: ", target_tokenized)
+print(f"\nTarget: `{decoder_tokenizer.decode(target_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
+# Move data to GPU.
+for key,item in command_tokenized.items():
+    if type(item).__name__ == "Tensor":
+        command_tokenized[key] = item.cuda()
+for key,item in target_tokenized.items():
+    if type(item).__name__ == "Tensor":
+        target_tokenized[key] = item.cuda()
+
+# Elementary training.
+optimizer = torch.optim.Adam(bert2bert.parameters(), lr=0.000001)
 for epoch in range(30):
     print("*"*50, "Epoch", epoch, "*"*50)
     for batch in tqdm(sierra_dl):
@@ -136,29 +145,15 @@ for epoch in range(30):
         optimizer.step()
 
     print("*"*50, "Sanity check at the end of Epoch", epoch, "*"*50)
-    # Sample.
-    command = "Separate the given stack to form blue, red and yellow blocks stack."
-    goals = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
-    values = [False, True, True, False]
-    goals = process_goals(goals, values, return_string=True)
-    print("Command: ", command)
-    print("Target: ", goals)
 
-    # Tokenize inputs and labels.
-    inputs = encoder_tokenizer(command, add_special_tokens=True, return_tensors="pt")
-    print("Inputs tokenized: ", inputs)
+    print("Command tokenized: ", command_tokenized)
+    print(f"\nCommand: `{encoder_tokenizer.decode(command_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
-    goals_tokenized = decoder_tokenizer(goals, add_special_tokens=add_special_tokens, return_tensors="pt")
-    print("Target tokenized: ", goals_tokenized)
-    print(f"\nTarget: `{decoder_tokenizer.decode(goals_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
-
-    # Move inputs to GPU.
-    for key,item in inputs.items():
-        if type(item).__name__ == "Tensor":
-            inputs[key] = item.cuda()
+    print("Target tokenized: ", target_tokenized)
+    print(f"\nTarget: `{decoder_tokenizer.decode(target_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
     # Generate output:
-    greedy_output = bert2bert.generate(inputs.input_ids, max_length=(sierra_ds.max_goals_length + 2))
-    #print(f"Output ({greedy_output.shape}): {greedy_output}")
+    greedy_output = bert2bert.generate(input_ids=command_tokenized.input_ids, max_length=(sierra_ds.max_goals_length + 2))
+    print(f"Output ({greedy_output.shape}): {greedy_output}")
     print(f"\nModel prediction: `{decoder_tokenizer.decode(greedy_output[0], skip_special_tokens=False)}`\n")
 

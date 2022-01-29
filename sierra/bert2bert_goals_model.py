@@ -27,7 +27,7 @@ process_goals = SierraDataset.process_goals_sep
 goals_sep = True
 # Add special tokens - for decoder only!
 add_special_tokens = False
-limit = 100
+limit = -1
 
 # Paths.
 brain_path = "/home/tkornuta/data/brain2"

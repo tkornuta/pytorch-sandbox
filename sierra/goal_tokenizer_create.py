@@ -20,18 +20,17 @@ process_goals = SierraDataset.process_goals_sep
 # Add special tokens - for decoder only!
 add_special_tokens = False
 
-
 # Paths.
 brain_path = "/home/tkornuta/data/brain2"
 sierra_path = os.path.join(brain_path, "leonardo_sierra")
 decoder_tokenizer_path = os.path.join(brain_path, tokenizer_name)
 
+# Get files.
+sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
+
 
 init = True
 if init:
-    # Get files.
-    sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
-
     # Process goals.
     words = set()
 
@@ -60,6 +59,7 @@ if init:
     vocab = {}
     for special_token in ["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]", "[BOS]", "[EOS]"]:
         vocab[special_token] = len(vocab)
+    # Add other words - if not already present.
     for w in words:
         if w not in vocab:
             vocab[w] = len(vocab)
@@ -74,6 +74,7 @@ if init:
 
     # Save the created tokenizer.
     init_tokenizer.save(decoder_tokenizer_path)
+    print("Tokenizer saved to: ", decoder_tokenizer_path)
 
 # Load from tokenizer file.
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=decoder_tokenizer_path)
@@ -81,7 +82,7 @@ tokenizer.add_special_tokens({'pad_token': '[PAD]', 'cls_token': '[CLS]', 'sep_t
     'unk_token': '[UNK]', 'mask_token': '[MASK]', 'bos_token': '[BOS]', 'eos_token': '[EOS]'
     })
 
-print(f"\nTokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
+print(f"\nLoaded tokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
 for k, v in tokenizer.get_vocab().items():
     print(k, ": ", v)
 

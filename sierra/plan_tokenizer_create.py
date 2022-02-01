@@ -13,16 +13,20 @@ from transformers import PreTrainedTokenizerFast
 
 from sierra_dataset import SierraDataset
 
-# Files with goals.
+# Paths.
 brain_path = "/home/tkornuta/data/brain2"
 sierra_path = os.path.join(brain_path, "leonardo_sierra")
-decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.plan_decoder_tokenizer.json")
 
+# Tokenizer settings.
+decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.plan_decoder_tokenizer_sep.json")
+process_goals = SierraDataset.process_plan_sep
+add_special_tokens = False
+
+# Get files.
+sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
 
 init = True
 if init:
-    # Get files.
-    sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
 
     # Process goals.
     words = set()
@@ -36,7 +40,7 @@ if init:
         symbolic_plan = h5["sym_plan"][()]
         
         # Process plan.
-        tokenized_plans = SierraDataset.process_plan(symbolic_plan)
+        tokenized_plans = process_goals(symbolic_plan)
 
         for token in tokenized_plans:
             words.add(token)
@@ -49,35 +53,41 @@ if init:
     vocab = {}
     for special_token in ["[PAD]", "[CLS]", "[SEP]", "[UNK]", "[MASK]", "[BOS]", "[EOS]"]:
         vocab[special_token] = len(vocab)
+    # Add other words - if not already present.
     for w in words:
-        vocab[w] = len(vocab)
+        if w not in vocab:
+            vocab[w] = len(vocab)
+    print(vocab)
 
     # New tokenizer.
     init_tokenizer = BertWordPieceTokenizer(vocab=vocab) 
     init_tokenizer.normalizer = Sequence([Replace("(", " ( "), Replace(")", " ) "), BertNormalizer()])
     init_tokenizer.pre_tokenizer = Whitespace()
-    init_tokenizer.pad_token_id = vocab["[PAD]"]
+    # init_tokenizer.pad_token_id = vocab["[PAD]"]
 
     # Save the created tokenizer.
     init_tokenizer.save(decoder_tokenizer_path)
+    print("\nTokenizer saved to: ", decoder_tokenizer_path)
 
 # Load from tokenizer file.
 tokenizer = PreTrainedTokenizerFast(tokenizer_file=decoder_tokenizer_path)
-tokenizer.add_special_tokens({'pad_token': '[PAD]'})
+tokenizer.add_special_tokens({'pad_token': '[PAD]', 'cls_token': '[CLS]', 'sep_token': '[SEP]',
+    'unk_token': '[UNK]', 'mask_token': '[MASK]', 'bos_token': '[BOS]', 'eos_token': '[EOS]'
+    })
 
-print(f"\nTokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
+print(f"\nLoaded tokenizer vocabulary ({len(tokenizer.get_vocab())}):\n" + "-"*50)
 for k, v in tokenizer.get_vocab().items():
     print(k, ": ", v)
 
 goals = "approach_obj(yellow_block),grasp_obj_on_red_block(yellow_block),lift_obj_from_red_block(yellow_block),place_on_center(yellow_block),approach_obj(red_block),grasp_obj(red_block),lift_obj_from_tabletop(red_block),align_red_block_with(blue_block),stack_red_block_on(blue_block),approach_obj(green_block),grasp_obj(green_block),lift_obj_from_far(green_block),place_on_center(green_block),approach_obj(yellow_block),grasp_obj(yellow_block),lift_obj_from_tabletop(yellow_block),align_yellow_block_with(red_block),stack_yellow_block_on(red_block),go_home(robot)"
-input = SierraDataset.process_plan(goals, return_string=True)
+input = process_goals(goals, return_string=True)
 
 print("INPUT: ", input)
 
-encoded = tokenizer.encode(input) #, padding=True, truncation=True)#, return_tensors="pt")
+encoded = tokenizer.encode(input, add_special_tokens=add_special_tokens) #, padding=True, truncation=True)#, return_tensors="pt")
 print(encoded)
 
-print("DECODED: ", tokenizer.decode(encoded, skip_special_tokens=True))
+print("DECODED: ", tokenizer.decode(encoded, skip_special_tokens=False))
 
 # Unit testing ;)
 def compare(debug=False):
@@ -93,14 +103,14 @@ def compare(debug=False):
         symbolic_plan = h5["sym_plan"][()]
 
         # Process plan.
-        input = SierraDataset.process_plan(symbolic_plan, return_string=True)
+        input = process_goals(symbolic_plan, return_string=True)
 
         # Encode and decode.
-        encoded = tokenizer.encode(input)
+        encoded = tokenizer.encode(input, add_special_tokens=add_special_tokens)
         # Custom postprocessing - remove space before the comma.
         input = input.replace(" ,", ",")
 
-        decoded = tokenizer.decode(encoded, skip_special_tokens=True)
+        decoded = tokenizer.decode(encoded, skip_special_tokens=False)
         if input != decoded:
             if debug:
                 print(f"{input} !=\n{decoded}")

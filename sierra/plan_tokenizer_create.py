@@ -63,7 +63,7 @@ if init:
 
     # New tokenizer.
     init_tokenizer = BertWordPieceTokenizer(vocab=vocab) 
-    init_tokenizer.normalizer = Sequence([Replace("(", " ( "), Replace(")", " ) "), BertNormalizer()])
+    #init_tokenizer.normalizer = Sequence([Replace("(", " ( "), Replace(")", " ) "), BertNormalizer()])
     init_tokenizer.pre_tokenizer = Whitespace()
     # init_tokenizer.pad_token_id = vocab["[PAD]"]
 

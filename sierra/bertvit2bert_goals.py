@@ -96,13 +96,13 @@ sample = next(iter(DataLoader(sierra_ds, batch_size=1, shuffle=True)))
 
 # Sample.
 print(f"Sample {sample['idx']}: {sample['sample_names']}\n" + "-"*100)
-print("Command: ", sample["command_humans"])
+print("Command: ", sample["command"])
 print("Target: ", sample["symbolic_goals_with_negation"])
 print("-"*100)
 
 input_image = sample["init_rgb"]
 # Tokenize inputs.
-command_tokenized = encoder_tokenizer(sample["command_humans"], add_special_tokens=True, return_tensors="pt")
+command_tokenized = encoder_tokenizer(sample["command"], add_special_tokens=True, return_tensors="pt")
 print("Command tokenized: ", command_tokenized)
 print(f"\nCommand: `{encoder_tokenizer.decode(command_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
@@ -126,7 +126,7 @@ for epoch in range(30):
     print("*"*50, "Epoch", epoch, "*"*50)
     for batch in tqdm(sierra_dl):
         # tokenize commands and goals.
-        commands = encoder_tokenizer(batch["command_humans"], add_special_tokens=True, return_tensors="pt", padding=True, truncation=True)
+        commands = encoder_tokenizer(batch["command"], add_special_tokens=True, return_tensors="pt", padding=True, truncation=True)
         labels = decoder_tokenizer(batch["symbolic_goals_with_negation"], add_special_tokens=False, return_tensors="pt", padding=True, truncation=True, )
         
         # Move data to GPU.

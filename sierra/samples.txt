@@ -27,7 +27,7 @@ File/sample: data_00030000_00030821
 command_templates[-1]
 'set green square to the right of the table ... oh and put green square on the bottom and yellow then red cube above it'
 
-command_humans[-1]
+command[-1]
 ['Separate the given stack to form green, yellow and red blocks stack.',
 'Make a stack of all blocks except the blue block.']
 

@@ -8,13 +8,13 @@ from tokenizers import BertWordPieceTokenizer
 brain_path = "/home/tkornuta/data/brain2"
 processed_path = os.path.join(brain_path, "processed")
 command_templates = os.path.join(processed_path, "command_templates.csv")
-command_humans = os.path.join(processed_path, "command_humans.csv")
+command = os.path.join(processed_path, "command.csv")
 
 # Initialize a new tokenizer
 tokenizer = BertWordPieceTokenizer()
 
 # Then train it!
-tokenizer.train([ command_templates,  command_humans], vocab_size=100)
+tokenizer.train([ command_templates,  command], vocab_size=100)
 print("Vocabulary size: ", tokenizer.get_vocab_size())
 for k, v in tokenizer.get_vocab().items():
     print(k, ": ", v)
@@ -69,7 +69,7 @@ def compare(filename, debug=False):
         print(f"Decoding: ALL {total} OK")
 
 compare(command_templates)
-compare(command_humans)
+compare(command)
 
 # And finally save it somewhere
 #tokenizer.save("./path/to/directory/my-bpe.tokenizer.json")

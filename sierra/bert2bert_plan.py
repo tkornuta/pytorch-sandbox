@@ -82,8 +82,8 @@ for epoch in range(30):
     if True:
         for batch in tqdm(sierra_dl):
             # tokenize commands and goals.
-            inputs = encoder_tokenizer(batch["command_humans"], add_special_tokens=True, return_tensors="pt", padding=True, truncation=True)
-            labels = decoder_tokenizer(batch["symbolic_plans"], return_tensors="pt", padding=True, max_length=sierra_ds.max_plan_length, truncation=True, add_special_tokens=True, )
+            inputs = encoder_tokenizer(batch["command"], add_special_tokens=True, return_tensors="pt", padding=True, truncation=True)
+            labels = decoder_tokenizer(batch["symbolic_plan_processed"], return_tensors="pt", padding=True, max_length=sierra_ds.max_plan_length, truncation=True, add_special_tokens=True, )
 
             # Move to GPU.
             for key,item in inputs.items():

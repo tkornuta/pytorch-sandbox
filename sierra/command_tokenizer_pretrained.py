@@ -8,7 +8,7 @@ from transformers import BertTokenizer
 brain_path = "/home/tkornuta/data/brain2"
 processed_path = os.path.join(brain_path, "processed")
 command_templates = os.path.join(processed_path, "command_templates.csv")
-command_humans = os.path.join(processed_path, "command_humans.csv")
+command = os.path.join(processed_path, "command.csv")
 
 # Initialize a new tokenizer
 tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
@@ -65,7 +65,7 @@ def compare(filename, debug=False):
         print(f"Decoding: ALL {total} OK")
 
 compare(command_templates, debug=False)
-compare(command_humans, debug=True)
+compare(command, debug=True)
 
 # And finally save it somewhere
 #tokenizer.save("./path/to/directory/my-bpe.tokenizer.json")

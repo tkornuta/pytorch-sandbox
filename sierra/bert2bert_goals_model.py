@@ -18,7 +18,7 @@ from transformers import BertTokenizer, PreTrainedTokenizerFast
 from transformers import BertConfig
 
 from encoder_decoder import EncoderDecoderModel
-from sierra_dataset import SierraDataset
+from sierra_dataset import SierraDataset,SierraDatasetConf
 
 # TOKENIZER & PROCESSING
 tokenizer_name = "leonardo_sierra.goals_decoder_tokenizer_sep.json"
@@ -28,6 +28,7 @@ goals_sep = True
 # Add special tokens - for decoder only!
 add_special_tokens = False
 limit = -1
+
 
 # Paths.
 brain_path = "/home/tkornuta/data/brain2"
@@ -52,8 +53,9 @@ decoder_tokenizer.add_special_tokens({'eos_token': '[EOS]'})
 # decoder_tokenizer.model_max_length=512 ??
 
 # Create dataset/dataloader.
-sierra_ds = SierraDataset(brain_path=brain_path, goals_sep=goals_sep, limit=limit)
-sierra_dl = DataLoader(sierra_ds, batch_size=256, shuffle=True, num_workers=2)
+sierra_ds_cfg = SierraDatasetConf(brain_path=brain_path, goals_sep=goals_sep, limit=limit)
+sierra_ds = SierraDataset(sierra_ds_cfg)
+sierra_dl = DataLoader(sierra_ds, batch_size=2, shuffle=True, num_workers=2)
 
 # leverage checkpoints for Bert2Bert model...
 # use BERT's cls token as BOS token and sep token as EOS token
@@ -96,18 +98,18 @@ sample = next(iter(DataLoader(sierra_ds, batch_size=1, shuffle=True)))
 #command = "Separate the given stack to form blue, red and yellow blocks stack."
 #goals = "has_anything(robot),on_surface(blue_block, tabletop),stacked(blue_block, red_block),on_surface(yellow_block, tabletop)"
 
-print(f"Sample {sample['idx']}: {sample['sample_names']}\n" + "-"*100)
-print("Command: ", sample["command_humans"])
-print("Target: ", sample["symbolic_goals_with_negation"])
+print(f"Sample {sample['idx']}: {sample['filename']}\n" + "-"*100)
+print("Command: ", sample["command"])
+print("Target: ", sample["symbolic_goals_processed"])
 print("-"*100)
 
 # Tokenize inputs.
-command_tokenized = encoder_tokenizer(sample["command_humans"], add_special_tokens=True, return_tensors="pt")
+command_tokenized = encoder_tokenizer(sample["command"], add_special_tokens=True, return_tensors="pt")
 print("Command tokenized: ", command_tokenized)
 print(f"\nCommand: `{encoder_tokenizer.decode(command_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
 # Tokenize labels - do not add special tokens as they are already due to the preprocessing.
-target_tokenized = decoder_tokenizer(sample["symbolic_goals_with_negation"], add_special_tokens=False, return_tensors="pt") 
+target_tokenized = decoder_tokenizer(sample["symbolic_goals_processed"], add_special_tokens=False, return_tensors="pt") 
 print("Target tokenized: ", target_tokenized)
 print(f"\nTarget: `{decoder_tokenizer.decode(target_tokenized.input_ids[0], skip_special_tokens=False)}`\n")
 
@@ -125,8 +127,8 @@ for epoch in range(30):
     print("*"*50, "Epoch", epoch, "*"*50)
     for batch in tqdm(sierra_dl):
         # tokenize commands and goals.
-        inputs = encoder_tokenizer(batch["command_humans"], add_special_tokens=True, return_tensors="pt", padding=True, truncation=True)
-        labels = decoder_tokenizer(batch["symbolic_goals_with_negation"], return_tensors="pt", padding=True, truncation=True, add_special_tokens=add_special_tokens)
+        inputs = encoder_tokenizer(batch["command"], add_special_tokens=True, return_tensors="pt", padding=True, truncation=True)
+        labels = decoder_tokenizer(batch["symbolic_goals_processed"], return_tensors="pt", padding=True, truncation=True, add_special_tokens=add_special_tokens)
         # Move to GPU.
         for key,item in inputs.items():
             if type(item).__name__ == "Tensor":
@@ -136,8 +138,18 @@ for epoch in range(30):
                 labels[key] = item.cuda()
 
         # Get outputs/loss.
-        output = bert2bert(input_ids=inputs.input_ids, labels=labels.input_ids, return_dict=True)
-        print("loss = ", output.loss)
+        #ones = torch.ones(labels.input_ids.shape, dtype=torch.int64).cuda()
+        #output = bert2bert(input_ids=inputs.input_ids, labels=labels.input_ids, decoder_attention_mask=ones, return_dict=True)
+        #print("loss masks all ones = ", output.loss)
+        #print(output["logits"][0][0])
+
+        #output = bert2bert(input_ids=inputs.input_ids, labels=labels.input_ids, return_dict=True)
+        #print("loss no mask passed = ", output.loss)
+        #print(output["logits"][0][0])
+
+        output = bert2bert(input_ids=inputs.input_ids, labels=labels.input_ids, decoder_attention_mask=labels.attention_mask, return_dict=True)
+        #print("loss with decoder_attention_mask = ", output.loss)
+        #print(output["logits"][0][0])
 
         output.loss.backward()
 

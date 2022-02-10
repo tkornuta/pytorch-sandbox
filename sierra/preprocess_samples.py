@@ -15,16 +15,16 @@ processed_path = os.path.join(brain_path, "processed")
 sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
 
 # Open csv file with commands created by humans.
-command_humans_dict = {}
+command_dict = {}
 with open(os.path.join(brain_path, 'sierra_5k_v1.csv'), newline='') as csvfile:
     reader = csv.reader(csvfile)
     for row in reader:
-        command_humans_dict[row[0][:-4]] = row[1:]
+        command_dict[row[0][:-4]] = row[1:]
 
 # Prepare data structures
 sample_names = []
 command_templates = []
-command_humans = []
+command = []
 symbolic_plans = []
 symbolic_goals = []
 symbolic_goals_values = []
@@ -46,7 +46,7 @@ for filename in tqdm(sierra_files):
     #print(command_templates[-1])
 
     # Human command - from another file!
-    command_humans.append(command_humans_dict[sample_id])
+    command.append(command_dict[sample_id])
 
     #print("Symbolic Plan / Actions: ", h5["sym_plan"][()], '\n')
     symbolic_plans.append(h5["sym_plan"][()])
@@ -77,7 +77,7 @@ def save_to(name, list_to_save):
 
 save_to("sample_names.csv", sample_names)
 save_to("command_templates.csv", command_templates)
-save_to("command_humans.csv", command_humans)
+save_to("command.csv", command)
 save_to("symbolic_plans.csv", symbolic_plans)
 save_to("symbolic_goals.csv", symbolic_goals)
 save_to("symbolic_goals_values.csv", symbolic_goals_values)

@@ -6,7 +6,6 @@ import io
 from typing import List
 import numpy as np
 from PIL import Image
-import logging
 
 from dataclasses import dataclass, field
 
@@ -16,11 +15,15 @@ from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 
+from brain_gym import logger
+
 
 @dataclass
 class SierraDatasetConf:
+    type: str = "brain_gym.data_modules.sierra_dataset_clean.SierraDataset"
     brain_path: str = "/home/tkornuta/data/brain2"
     data_subpath: str = "leonardo_sierra"
+    command_sources: List = field(default_factory=lambda: ["humans", "lang_description", "lang_goal"]) # List of sources of commands.
     process_goals: str = "sep" # Options: clean, sep
     process_plans: str = "split" # Options: clean, sep, split
     skip_actions: List = field(default_factory=lambda: ["approach", "go_home"]) # List of actions to be skipped.
@@ -56,20 +59,6 @@ class SierraDataset(Dataset):
             for row in reader:
                 command_from_humans_dict[row[0][:-4]] = row[1:]
 
-        # Prepare data structures
-        self.filename = []
-        self.command_from_templates = []
-        self.command_from_goals_templates = []
-        self.command_from_humans = []
-        self.symbolic_goals = []
-        self.symbolic_goals_values = []
-        self.symbolic_goals_processed = []
-        self.symbolic_plan = []
-        self.symbolic_plan_processed = []
-        self.symbolic_plan_skipped_actions = [] # List of lists.
-
-        self.init_rgb_images = []
-
         # Transforms used to reshape/normalize RGB images to format/standard used in pretrained ResNet/ViT models.
         rgb_transforms = transforms.Compose(
             [
@@ -79,56 +68,59 @@ class SierraDataset(Dataset):
             ]
         )
 
-        # Max lengths.
-        self.min_goals_length = 0
+        # Statistics.
+        self.min_command_words = 100000
+        self.avg_command_words = 0
+        self.max_command_words = 0
+
+        self.min_goals_length = 100000
         self.avg_goals_length = 0
         self.max_goals_length = 0
-        self.min_plan_length = 0
+
+        self.min_plan_length = 100000
         self.avg_plan_length = 0
         self.max_plan_length = 0
 
-        # Get files.
-        split_file = os.path.join(cfg.brain_path, cfg.split + ".csv")
-        if not os.path.exists(split_file):
-            # Create all splits.
-            self.split_h5_by_code()
-        # Load list of files.
-        sierra_files = self.get_files(split_file)
-        #sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
+        # Get files - adequate to the split.
+        if cfg.split == "all":
+            # Get all files.
+            sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
+        elif cfg.split in ["train", "valid", "test"]:
+            split_file = os.path.join(cfg.brain_path, cfg.split + ".csv")
+            if not os.path.exists(split_file):
+                # Create all splits.
+                self.split_h5_by_code()
+            # Load list of files.
+            sierra_files = self.get_files(split_file)
+        else:
+            raise ValueError("Invalid ")
         
+        # List containing all samples.
+        self.samples =[]
+        num_records_processed = 0
         # Open files one by one.
         for i,filename in enumerate(tqdm(sierra_files)):
+
             # Limit number of samples - for testing purposes.
-            if cfg.limit >0 and i >= cfg.limit:
+            if cfg.limit >0 and len(self.samples) >= cfg.limit:
                 break
 
             # Load the file.
             h5 = h5py.File(os.path.join(sierra_path, filename), 'r')
-            
+
             # Add sample name.
             sample_id = filename[:-3]
 
-            # Check if sample is VALID!
-            if type(command_from_humans_dict[sample_id]) == list and len(command_from_humans_dict[sample_id]) == 0:
-                logging.warning(f"Skipping {i}-th sample `{sample_id}`")
-                continue
-            # Error for sample 4759 command: []
+            # Create new sample and store there all the fields.
+            sample = {}
+            sample["filename"] = sample_id
 
-            self.filename.append(sample_id)
-
-            # Human command - from another file!
-            self.command_from_humans.append(command_from_humans_dict[sample_id])
-            # Short command generated in a scripted way.
-            self.command_from_templates.append(h5["lang_description"][()])
-            # Command being step-by-step plan generated in a scripted way.
-            self.command_from_goals_templates.append(h5["lang_goal"][()])
-            
             # Symbolic goals.
             sym_goal = h5["sym_goal"][()]
             sym_goal_values = h5["sym_values"][()]
-
-            self.symbolic_goals.append(sym_goal)
-            self.symbolic_goals_values.append(sym_goal_values)
+            sample["symbolic_goals"] = sym_goal
+            # Change to strings - to avoiding changing to tensors.
+            sample["symbolic_goals_values"] = ",".join([str(v) for v in sym_goal_values])
 
             # Proces symbolic goals, depending on the settings.
             if cfg.process_goals == "clean":
@@ -138,12 +130,11 @@ class SierraDataset(Dataset):
             else:
                 raise ValueError(f"Invalid process_goal value '{cfg.process_goals}'")
 
-            self.symbolic_goals_processed.append(" ".join(tokenized_goals))
+            sample["symbolic_goals_processed"] = " ".join(tokenized_goals)
 
             # Proces symbolic plans, depending on the settings.
-            #print("Symbolic Plan / Actions: ", h5["sym_plan"][()], '\n')
             sym_plan = h5["sym_plan"][()]
-            self.symbolic_plan.append(sym_plan)
+            sample["symbolic_plan"] = sym_plan
 
             if cfg.process_plans == "clean":
                 tokenized_plan, skipped_actions = self.process_plan_clean(sym_plan, self.cfg.skip_actions, self.cfg.add_pad)
@@ -154,16 +145,10 @@ class SierraDataset(Dataset):
             else:
                 raise ValueError(f"Invalid process_goal value '{cfg.process_plans}'")
 
-            self.symbolic_plan_processed.append(" ".join(tokenized_plan))
-            self.symbolic_plan_skipped_actions.append(skipped_actions)
+            sample["symbolic_plan_processed"] = " ".join(tokenized_plan)
 
-            # Set max, min, avg lengths.
-            self.min_goals_length = min(self.min_goals_length, len(tokenized_goals))
-            self.avg_goals_length += len(tokenized_goals)
-            self.max_goals_length = max(self.max_goals_length, len(tokenized_goals))
-            self.min_plan_length = min(self.min_plan_length, len(tokenized_plan))
-            self.avg_plan_length += len(tokenized_plan)
-            self.max_plan_length = max(self.max_plan_length, len(tokenized_plan))
+            # Change to strings - to avoiding changing to tensors.
+            sample["symbolic_plan_skipped_actions"] = ",".join([str(v) for v in skipped_actions])
 
             if cfg.return_rgb:
                 # Number of images.
@@ -178,20 +163,81 @@ class SierraDataset(Dataset):
                 pil_rgb = im.convert("RGB")
                 rgb_normalized_tensor = rgb_transforms(pil_rgb)
                 
-                self.init_rgb_images.append(rgb_normalized_tensor)
+                sample["init_rgb"] = rgb_normalized_tensor
 
-        # Make sure all lenths are the same.
-        assert len(self.command_from_humans) == len(self.symbolic_goals)
-        assert len(self.command_from_humans) == len(self.symbolic_goals_processed)
-        assert len(self.command_from_humans) == len(self.symbolic_plan)
-        assert len(self.command_from_humans) == len(self.symbolic_plan_processed)
+            # Finally, create list of commands that are available for this sample.
+            commands = []
+
+            # Process "humans" if indicated.
+            if "humans" in self.cfg.command_sources:
+                human_commands = command_from_humans_dict[sample_id]
+                # Check if sample is VALID!
+                if type(human_commands) == list:
+                    if len(human_commands) == 0:
+                        # Error for sample 4759 command: []
+                        logger.warning(f"Skipping humand commands for {i}-th sample `{sample_id}`")
+                    else:                    
+                        # Several possible commands.
+                        commands.extend(human_commands)
+                else:
+                    # Single command.
+                    commands.append(human_commands)
+
+            # Process "lang_description" if indicated - step-by-step plan generated in a scripted way
+            if "lang_description" in self.cfg.command_sources:
+                lang_descriptions = h5["lang_description"][()]
+                commands.append(lang_descriptions)
+
+            # Process "lang_goal" if indicated - command generated in a scripted way.
+            if "lang_goal" in self.cfg.command_sources:
+                lang_goal = h5["lang_goal"][()]
+                
+                commands.extend(lang_goal.split(","))
+
+            #print(f"Resulting commands ({len(commands)}) = {commands}")
+
+            # Ok, now make n-copies the same sample for each command.
+            for command in commands:
+                # Copy sample.
+                sample_copy = {
+                    "idx": len(self.samples),
+                    "command": command,
+                }
+                for k,v in sample.items():
+                    sample_copy[k] = v
+                self.samples.append(sample_copy)
+
+                # Update statistics.
+                len_command = len(command.split())
+                len_goals = len(tokenized_goals)
+                len_plan = len(tokenized_plan)
+
+                self.min_command_words = min(self.min_command_words, len_command)
+                self.avg_command_words += len_command
+                self.max_command_words = max(self.max_command_words, len_command)
+                self.min_goals_length = min(self.min_goals_length, len_goals)
+                self.avg_goals_length += len_goals
+                self.max_goals_length = max(self.max_goals_length, len_goals)
+                self.min_plan_length = min(self.min_plan_length, len_plan)
+                self.avg_plan_length += len_plan
+                self.max_plan_length = max(self.max_plan_length, len_plan)
+
+                # Stop adding samples if limit set.
+                if cfg.limit > 0 and len(self.samples) >= cfg.limit:
+                    break
+            
+            # Increment number of processed samples.
+            num_records_processed += 1
 
         # Show basic split statistics.
-        self.avg_goals_length = self.avg_goals_length / len(self.command_from_humans)
-        self.avg_plan_length = self.avg_plan_length / len(self.command_from_humans)
-        logging.info(f"Split '{self.cfg.split}' size = ", len(self.command_from_humans))
-        logging.info(f"Number Goals: Min = {self.min_goals_length} Avg = {self.avg_goals_length} Max = {self.max_goals_length} ")
-        logging.info(f"Plan length: Min = {self.min_plan_length} Avg = {self.avg_plan_length} Max = {self.max_plan_length} ")
+        self.avg_command_words = int(self.avg_command_words / len(self.samples))
+        self.avg_goals_length = int(self.avg_goals_length / len(self.samples))
+        self.avg_plan_length = int(self.avg_plan_length / len(self.samples))
+        logger.info(f"Split '{self.cfg.split}' size = {len(self.samples)}")
+        logger.info(f"Number of records processed = {num_records_processed}")
+        logger.info(f"Number of words in commands | Min = {self.min_command_words} | Avg = {self.avg_command_words} | Max = {self.max_command_words}")
+        logger.info(f"Number of token goals | Min = {self.min_goals_length} | Avg = {self.avg_goals_length} | Max = {self.max_goals_length}")
+        logger.info(f"Number of tokens in plan | Min = {self.min_plan_length} | Avg = {self.avg_plan_length} | Max = {self.max_plan_length}")
 
 
     def split_h5_by_code(self):
@@ -200,7 +246,7 @@ class SierraDataset(Dataset):
 
         Held-out "test" examples are determined by task code. """
 
-        logging.info("Regenerating data splits...")
+        logger.info("Regenerating data splits...")
 
         if self.cfg.split_percentage <= 0 or self.cfg.split_percentage >= 1:
             raise RuntimeError('train val ratio must be > 0 and < 1')
@@ -234,9 +280,9 @@ class SierraDataset(Dataset):
                 code = trial['task_code'][()]
                 trial.close()
             except Exception as e:
-                logging.error('Problem handling file: ' + str(filename))
-                logging.error('Full filename: ' + str(full_filename))
-                logging.error('Failed with exception: ' + str(e))
+                logger.error('Problem handling file: ' + str(filename))
+                logger.error('Full filename: ' + str(full_filename))
+                logger.error('Failed with exception: ' + str(e))
                 skipped.append(filename)
                 continue
             if code % 10 > 7:
@@ -254,7 +300,7 @@ class SierraDataset(Dataset):
                 counter = counter % 10
 
         if len(skipped) > 0:
-            logging.warning("Split finished with errors. Had to skip the following files: " + str(skipped))
+            logger.warning("Split finished with errors. Had to skip the following files: " + str(skipped))
         train_file.close()
         valid_file.close()
         test_file.close()
@@ -274,7 +320,7 @@ class SierraDataset(Dataset):
 
 
     def __len__(self):
-        return len(self.filename)
+        return len(self.samples)
 
     @classmethod
     def process_goals_clean(cls, symbolic_goals, symbolic_goals_values, add_pad = True, return_string = False):
@@ -439,9 +485,13 @@ class SierraDataset(Dataset):
 
             tokenized_plans.extend(action_items)
 
-        # Add EOS + [PAD] at the end.
-        tokenized_plans.extend(["[EOS]"])
+        # Add [EOS] at the end.
+        if tokenized_plans[-1] == "[SEP]":
+            tokenized_plans[-1] = ["[EOS]"]
+        else:
+            tokenized_plans.extend(["[EOS]"])
 
+        # Optionally add [PAD] at the end.
         if add_pad:
             tokenized_plans.extend(["[PAD]"])
 
@@ -523,7 +573,7 @@ class SierraDataset(Dataset):
                 main_object = verb[6:_idx]
                 verb = 'align'
 
-            # Clearn verbs a bit.
+            # Clean verbs a bit.
             verb=verb.replace("_obj", "")
 
             if supporting_object is None:
@@ -557,54 +607,21 @@ class SierraDataset(Dataset):
             return tokenized_plans, skipped_actions
 
     def __getitem__(self, idx):
-
-        all_commands = []
-        # Create list of possible commands.
-        command_from_humans = self.command_from_humans[idx]
-        if type(command_from_humans) == str:
-            all_commands.append(command_from_humans)
-        else:
-            all_commands.extend(command_from_humans)
-            # Randomly pick one of the command humans to be returned.
-            command_from_humans = command_from_humans[np.random.randint(len(command_from_humans))]
-
-        # Add template commands.
-        all_commands.append(self.command_from_templates[idx])
-        # Add template commands from goals.
-        all_commands.append(self.command_from_goals_templates[idx])
-        
-        # Sample command randomly from one of three sources.
-        command = all_commands[np.random.randint(len(all_commands))]
-
-        # Create sample.
-        sample = {
-            "idx": idx,
-            "filename": self.filename[idx],
-            "command": command,
-            "command_from_humans": command_from_humans,
-            "command_from_templates": self.command_from_templates[idx],
-            "command_from_goals_templates": self.command_from_goals_templates[idx],
-            "symbolic_goals": self.symbolic_goals[idx],
-            "symbolic_goals_processed": self.symbolic_goals_processed[idx],
-            "symbolic_plan": self.symbolic_plan[idx],
-            "symbolic_plan_processed": self.symbolic_plan_processed[idx],
-        }
-
-        #print(sample)
-        # Add
-        if self.cfg.return_rgb:
-            sample["init_rgb"] = self.init_rgb_images[idx]
-
-        return sample
+        # Just return the sample :)
+        return self.samples[idx]
 
 
 if __name__ == "__main__":
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger()
+
     # Create dataset.
-    sierra_cfg = SierraDatasetConf(brain_path="/home/tkornuta/data/brain2", return_rgb=False, limit=10)
+    sierra_cfg = SierraDatasetConf(brain_path="/home/tkornuta/data/brain2", return_rgb=False, split="test")#, command_sources=["humans"])#limit=10)
     sierra_ds = SierraDataset(cfg=sierra_cfg)
 
     # Create dataloader and get batch.
-    sierra_dl = DataLoader(sierra_ds, batch_size=4, shuffle=True, num_workers=0)
+    sierra_dl = DataLoader(sierra_ds, batch_size=1, shuffle=True, num_workers=0)
     batch = next(iter(sierra_dl))
 
     # Show samples.
@@ -614,4 +631,4 @@ if __name__ == "__main__":
         for k,v in batch.items():
             if k == "init_rgb":
                 continue
-            print(f"{k}: {v[i]}\n")
+            print(f"{k}: {v[i]}")

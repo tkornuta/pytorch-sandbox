@@ -14,14 +14,13 @@ from transformers import PreTrainedTokenizerFast
 from sierra_dataset import SierraDataset, SierraDatasetConf
 
 # Paths.
-brain_path = "/home/tkornuta/data/brain2"
-sierra_path = os.path.join(brain_path, "leonardo_sierra")
+data_path = "/home/tkornuta/data/local-leonardo-sierra5k"
+sierra_path = os.path.join(data_path, "leonardo_sierra")
 
 # Tokenizer settings.
-decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.plan_decoder_tokenizer_split.json")
-cfg = SierraDatasetConf(brain_path="/home/tkornuta/data/brain2", return_rgb=False, process_plans = "split")
+decoder_tokenizer_path = os.path.join(data_path, "leonardo_sierra.plan_decoder_tokenizer_split.json")
+cfg = SierraDatasetConf(data_path="/home/tkornuta/data/local-leonardo-sierra5k", return_rgb=False, process_plans = "split") #, skip_actions=[])
 process_plan = SierraDataset.process_plan_split
-
 
 # Get files.
 sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
@@ -81,20 +80,29 @@ print(f"\nLoaded tokenizer vocabulary ({len(tokenizer.get_vocab())}):\n")
 print("-"*50)
 for k, v in tokenizer.get_vocab().items():
     print(k, ": ", v)
-
-plan = "approach_obj(yellow_block),grasp_obj_on_red_block(yellow_block),lift_obj_from_red_block(yellow_block),place_on_center(yellow_block),approach_obj(red_block),grasp_obj(red_block),lift_obj_from_tabletop(red_block),align_red_block_with(blue_block),stack_red_block_on(blue_block),approach_obj(green_block),grasp_obj(green_block),lift_obj_from_far(green_block),place_on_center(green_block),approach_obj(yellow_block),grasp_obj(yellow_block),lift_obj_from_tabletop(yellow_block),align_yellow_block_with(red_block),stack_yellow_block_on(red_block),go_home(robot)"
-input, _ = process_plan(plan, cfg.skip_actions, cfg.add_pad, return_string=True)
-
 print("-"*50)
-print("INPUT: ", input)
+
+
+# Now, let's use it:
+input = "approach_obj(yellow_block),grasp_obj_on_red_block(yellow_block),lift_obj_from_red_block(yellow_block),place_on_center(yellow_block),approach_obj(red_block),grasp_obj(red_block),lift_obj_from_tabletop(red_block),align_red_block_with(blue_block),stack_red_block_on(blue_block),approach_obj(green_block),grasp_obj(green_block),lift_obj_from_far(green_block),place_on_center(green_block),approach_obj(yellow_block),grasp_obj(yellow_block),lift_obj_from_tabletop(yellow_block),align_yellow_block_with(red_block),stack_yellow_block_on(red_block),go_home(robot)"
+num_actions = len(input.split("),"))
+print(f"Input (number of actions: {num_actions}): {input}\n")
+
+input, _ = process_plan(input, cfg.skip_actions, cfg.add_pad, return_string=True)
+
+print(f"Processed input: {input}\n")
 
 encoded = tokenizer.encode(input, add_special_tokens=False)
-print(encoded)
+print(f"Tokenized input (number of plan tokens {len(encoded)}): {encoded}\n")
 
-print("DECODED: ", tokenizer.decode(encoded, skip_special_tokens=False))
+print("Detokenized: ", tokenizer.decode(encoded, skip_special_tokens=False))
 
 # Unit testing ;)
 def compare(debug=False):
+    min_plan_length = 100000
+    avg_plan_length = 0
+    max_plan_length = 0
+
     # Iterate through all inputs.
     diffs = 0
     total = 0
@@ -111,6 +119,13 @@ def compare(debug=False):
 
         # Encode and decode.
         encoded = tokenizer.encode(input, add_special_tokens=False)
+
+        # Statistics.
+        len_plan = len(encoded)
+        min_plan_length = min(min_plan_length, len_plan)
+        avg_plan_length += len_plan
+        max_plan_length = max(max_plan_length, len_plan)
+
         # Custom postprocessing - remove space before the comma.
         input = input.replace(" ,", ",")
 
@@ -126,5 +141,10 @@ def compare(debug=False):
         print(f"Decoding: DIFFERENCES for '{filename}' = {diffs} / {total}")
     else:
         print(f"Decoding: ALL {total} OK")
+
+    # Show basic split statistics.
+    avg_plan_length = int(avg_plan_length / total)
+    print(f"Number of tokens in plan | Min = {min_plan_length} | Avg = {avg_plan_length} | Max = {max_plan_length}")
+
 
 compare(debug=False)

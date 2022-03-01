@@ -5,8 +5,8 @@ import csv
 from tokenizers import BertWordPieceTokenizer
 
 # Files with commands.
-brain_path = "/home/tkornuta/data/brain2"
-processed_path = os.path.join(brain_path, "processed")
+data_path = "/home/tkornuta/data/local-leonardo-sierra5k"
+processed_path = os.path.join(data_path, "processed")
 command_templates = os.path.join(processed_path, "command_templates.csv")
 command = os.path.join(processed_path, "command.csv")
 

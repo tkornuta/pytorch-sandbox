@@ -6,8 +6,8 @@ from transformers import  BertGenerationEncoder, BertGenerationDecoder, EncoderD
 from transformers import AutoConfig, BertConfig
 from transformers import EncoderDecoderConfig
 
-brain_path = "/home/tkornuta/data/brain2"
-decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.decoder_tokenizer.json")
+data_path = "/home/tkornuta/data/local-leonardo-sierra5k"
+decoder_tokenizer_path = os.path.join(data_path, "leonardo_sierra.decoder_tokenizer.json")
 
 # Let's see how to increase the vocabulary of Bert model and tokenizer
 encoder_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')

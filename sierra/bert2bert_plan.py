@@ -18,9 +18,9 @@ from transformers import BertConfig
 from sierra_dataset import SierraDataset
 
 
-brain_path = "/home/tkornuta/data/brain2"
-sierra_path = os.path.join(brain_path, "leonardo_sierra")
-decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.plan_decoder_tokenizer.json")
+data_path = "/home/tkornuta/data/local-leonardo-sierra5k"
+sierra_path = os.path.join(data_path, "leonardo_sierra")
+decoder_tokenizer_path = os.path.join(data_path, "leonardo_sierra.plan_decoder_tokenizer.json")
 
 # Load original BERT Ttokenizer.
 encoder_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -40,7 +40,7 @@ decoder_tokenizer.add_special_tokens({'eos_token': '[EOS]'})
 # decoder_tokenizer.model_max_length=512 ??
 
 # Create dataset/dataloader.
-sierra_ds = SierraDataset(brain_path=brain_path)
+sierra_ds = SierraDataset(data_path=data_path)
 sierra_dl = DataLoader(sierra_ds, batch_size=64, shuffle=True, num_workers=2)
 
 # leverage checkpoints for Bert2Bert model...

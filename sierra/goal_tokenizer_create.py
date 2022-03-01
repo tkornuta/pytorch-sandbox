@@ -21,9 +21,9 @@ process_goals = SierraDataset.process_goals_sep
 add_special_tokens = False
 
 # Paths.
-brain_path = "/home/tkornuta/data/brain2"
-sierra_path = os.path.join(brain_path, "leonardo_sierra")
-decoder_tokenizer_path = os.path.join(brain_path, tokenizer_name)
+data_path = "/home/tkornuta/data/local-leonardo-sierra5k"
+sierra_path = os.path.join(data_path, "leonardo_sierra")
+decoder_tokenizer_path = os.path.join(data_path, tokenizer_name)
 
 # Get files.
 sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]

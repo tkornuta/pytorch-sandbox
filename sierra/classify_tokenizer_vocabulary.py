@@ -4,10 +4,10 @@ import os
 from tokenizers import Tokenizer
 from copy import deepcopy
 
-brain_path = "/home/tkornuta/data/brain2"
-sierra_path = os.path.join(brain_path, "leonardo_sierra")
-processed_path = os.path.join(brain_path, "processed")
-decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.goals_decoder_tokenizer.json")
+data_path = "/home/tkornuta/data/local-leonardo-sierra5k"
+sierra_path = os.path.join(data_path, "leonardo_sierra")
+processed_path = os.path.join(data_path, "processed")
+decoder_tokenizer_path = os.path.join(data_path, "leonardo_sierra.goals_decoder_tokenizer.json")
 
 # Load the tokenizer.
 tokenizer = Tokenizer.from_file(decoder_tokenizer_path)

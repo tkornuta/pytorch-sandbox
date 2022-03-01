@@ -12,10 +12,10 @@ from tokenizers.pre_tokenizers import Whitespace
 from transformers import PreTrainedTokenizerFast
 
 # Files with goals.
-brain_path = "/home/tkornuta/data/brain2"
-processed_path = os.path.join(brain_path, "processed")
+data_path = "/home/tkornuta/data/local-leonardo-sierra5k"
+processed_path = os.path.join(data_path, "processed")
 symbolic_goals = os.path.join(processed_path, "symbolic_goals.csv")
-decoder_tokenizer_path = os.path.join(brain_path, "leonardo_sierra.decoder_tokenizer.json")
+decoder_tokenizer_path = os.path.join(data_path, "leonardo_sierra.decoder_tokenizer.json")
 
 init = True
 if init:

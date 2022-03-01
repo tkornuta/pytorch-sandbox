@@ -6,17 +6,17 @@ import h5py
 import csv
 from tqdm import tqdm
 
-brain_path = "/home/tkornuta/data/brain2"
-sierra_path = os.path.join(brain_path, "leonardo_sierra")
-sierra_path = os.path.join(brain_path, "leonardo_sierra")
-processed_path = os.path.join(brain_path, "processed")
+data_path = "/home/tkornuta/data/local-leonardo-sierra5k"
+sierra_path = os.path.join(data_path, "leonardo_sierra")
+sierra_path = os.path.join(data_path, "leonardo_sierra")
+processed_path = os.path.join(data_path, "processed")
 
 # Get files.
 sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
 
 # Open csv file with commands created by humans.
 command_dict = {}
-with open(os.path.join(brain_path, 'sierra_5k_v1.csv'), newline='') as csvfile:
+with open(os.path.join(data_path, 'sierra_5k_v1.csv'), newline='') as csvfile:
     reader = csv.reader(csvfile)
     for row in reader:
         command_dict[row[0][:-4]] = row[1:]

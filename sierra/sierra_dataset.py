@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
+import encodings
 import os
 import csv
 import io
@@ -476,7 +477,7 @@ class SierraDataset(Dataset):
             * list of str OR a single string (depending on the return_string flag)
             * list of skipped actions
         """
-        # Split goals and goal values.
+        #print(symbolic_plan)
         symbolic_plan = symbolic_plan.split("),")
 
         tokenized_plans = []
@@ -519,7 +520,7 @@ class SierraDataset(Dataset):
             * list of str OR a single string (depending on the return_string flag)
             * list of skipped actions
         """
-        # Split goals and goal values.
+        #print(symbolic_plan)
         symbolic_plan = symbolic_plan.split("),")
 
         tokenized_plans = []
@@ -630,7 +631,6 @@ class SierraDataset(Dataset):
             * list of str OR a single string (depending on the return_string flag)
             * list of skipped actions
         """
-        # Split goals and goal values.
         #print(symbolic_plan)
         symbolic_plan = symbolic_plan.split("),")
 
@@ -728,7 +728,7 @@ class SierraDataset(Dataset):
         if verb == "lift" and replace_lift:
             action_items[0] = "pick"
         
-        print(action_items)
+        #print(action_items)
         #import pdb;pdb.set_trace()
         return action_items
 
@@ -746,7 +746,7 @@ class SierraDataset(Dataset):
             * list of str OR a single string (depending on the return_string flag)
             * list of skipped actions
         """
-        # Split goals and goal values.
+        #print(symbolic_plan)
         symbolic_plan = symbolic_plan.split("),")
 
         tokenized_plans = []
@@ -760,7 +760,7 @@ class SierraDataset(Dataset):
                     skip = True
                     break
             if skip:
-                print("Skipping: ",action)
+                #print("Skipping: ",action)
                 continue
 
             # Tokenize action.

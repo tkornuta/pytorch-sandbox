@@ -15,12 +15,12 @@ from sierra_dataset import SierraDataset, SierraDatasetConf
 
 # Paths.
 data_path = "/home/tkornuta/data/local-leonardo-sierra5k"
-sierra_path = os.path.join(data_path, "leonardo_sierra")
+sierra_path = os.path.join(data_path, "leonardo_sierra5k")
 
 # Tokenizer settings.
-decoder_tokenizer_path = os.path.join(data_path, "leonardo_sierra.plan_decoder_tokenizer_split.json")
-cfg = SierraDatasetConf(data_path="/home/tkornuta/data/local-leonardo-sierra5k", return_rgb=False, process_plans = "split") #, skip_actions=[])
-process_plan = SierraDataset.process_plan_split
+decoder_tokenizer_path = os.path.join(data_path, "leonardo_sierra.plan_decoder_tokenizer_const.json")
+cfg = SierraDatasetConf(data_path="/home/tkornuta/data/local-leonardo-sierra5k", return_rgb=False, process_plans = "const") #, skip_actions=[])
+process_plan = SierraDataset.process_plan_const
 
 # Get files.
 sierra_files = [f for f in os.listdir(sierra_path) if os.path.isfile(os.path.join(sierra_path, f))]
@@ -38,9 +38,11 @@ if init:
 
         # Get plan.        
         symbolic_plan = h5["sym_plan"][()]
+        if type(symbolic_plan) == bytes:
+            symbolic_plan = symbolic_plan.decode("utf-8") 
         
         # Process plan.
-        tokenized_plans, _ = process_plan(symbolic_plan, cfg.skip_actions, cfg.add_pad)
+        tokenized_plans, _ = process_plan(symbolic_plan, cfg.skip_actions)
 
         for token in tokenized_plans:
             words.add(token)
@@ -88,7 +90,7 @@ input = "approach_obj(yellow_block),grasp_obj_on_red_block(yellow_block),lift_ob
 num_actions = len(input.split("),"))
 print(f"Input (number of actions: {num_actions}): {input}\n")
 
-input, _ = process_plan(input, cfg.skip_actions, cfg.add_pad, return_string=True)
+input, _ = process_plan(input, cfg.skip_actions, return_string=True)
 
 print(f"Processed input: {input}\n")
 
@@ -113,9 +115,11 @@ def compare(debug=False):
         
         # Get plan.        
         symbolic_plan = h5["sym_plan"][()]
+        if type(symbolic_plan) == bytes:
+            symbolic_plan = symbolic_plan.decode("utf-8") 
 
         # Process plan.
-        input, _ = process_plan(symbolic_plan, cfg.skip_actions, cfg.add_pad, return_string=True)
+        input, _ = process_plan(symbolic_plan, cfg.skip_actions, return_string=True)
 
         # Encode and decode.
         encoded = tokenizer.encode(input, add_special_tokens=False)
